@@ -10,7 +10,7 @@ GitHub Pages版はHTML / CSS / JavaScriptだけで動く画面デモです。商
 python -m http.server 8000
 ```
 
-`http://localhost:8000`を開きます。初期カタログには39商品（CPU 28件）を登録しています。初期CPU仕様はメーカー公表情報、価格と在庫は試作用の仮値です。管理画面では商品を追加・検索・編集・削除できます。
+`http://localhost:8000`を開きます。初期カタログには40商品（CPU 28件）を登録しています。管理カテゴリはCPU、GPU、マザーボード、SSD、メモリ、CPUクーラー、ファン、PCケース、PC電源です。CPUとマザーボードはIntel / AMDとソケットを分けて記録します。初期CPU仕様はメーカー公表情報、価格と在庫は試作用の仮値です。管理画面ではカテゴリ・プラットフォームで絞り込み、商品を追加・検索・編集・削除できます。
 
 ## PHP / MySQLを起動
 
@@ -33,6 +33,8 @@ docker compose -f backend/docker-compose.yml exec -e DB_HOST=db -e ADMIN_PASSWOR
 ```
 
 作成後、画面下部の「管理者ログイン」から商品登録・編集・削除を行えます。DBの商品は管理者だけが変更できます。MySQLのデータは`pcparts-mysql`ボリュームに保持されます。
+
+既存のMySQLデータベースへこの更新を適用する場合は、アプリを更新する前に`database/migrations/20261001_categories_platform.sql`を一度だけ実行してください。新規データベースには`database/schema.sql`を使うため、この移行SQLは実行しません。
 
 ## 外部APIと購入商品の区別
 

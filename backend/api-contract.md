@@ -8,7 +8,9 @@ PHP APIとMySQLの接続状態を返します。
 
 ## `GET /api/products.php`
 
-MySQLに登録された有効商品を返します。`keyword`と`category`で絞り込めます。楽天市場APIの商品はこの一覧へ保存しません。
+MySQLに登録された有効商品を返します。`keyword`、`category`、`platform=Intel|AMD`で絞り込めます。楽天市場APIの商品はこの一覧へ保存しません。
+
+管理カテゴリは`CPU`、`GPU`、`マザーボード`、`SSD`、`メモリ`、`CPUクーラー`、`ファン`、`PCケース`、`PC電源`です。モニターなどPCパーツ以外の商品は`その他`に入ります。
 
 ```json
 {
@@ -18,6 +20,7 @@ MySQLに登録された有効商品を返します。`keyword`と`category`で�
       "name": "AMD Ryzen 7 9800X3D",
       "shortName": "AMD Ryzen 7 9800X3D",
       "maker": "AMD",
+      "platform": "AMD",
       "category": "CPU",
       "type": "cpu",
       "price": 79800,
@@ -45,7 +48,7 @@ Cookieセッションを使う管理者ログイン状態の確認・終了で�
 
 ### `POST /api/products.php`, `PUT /api/products.php?id={catalog_key}`, `DELETE /api/products.php?id={catalog_key}`
 
-セッション中の管理者だけが実行できます。登録・編集できるフィールドは商品名、表示名、メーカー、カテゴリ、価格、在庫、説明、仕様、メーカー情報URL、仮価格フラグです。削除は`is_active=FALSE`にする論理削除です。購入履歴の参照整合性を保ちます。
+セッション中の管理者だけが実行できます。登録・編集できるフィールドは商品名、表示名、メーカー、カテゴリ、プラットフォーム、価格、在庫、説明、仕様、メーカー情報URL、仮価格フラグです。CPUとマザーボードはプラットフォーム（Intel / AMD）が必須です。ソケットも仕様へ登録してください。削除は`is_active=FALSE`にする論理削除です。購入履歴の参照整合性を保ちます。
 
 ## `POST /api/ai/consult.php`
 

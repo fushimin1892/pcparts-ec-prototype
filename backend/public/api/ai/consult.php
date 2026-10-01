@@ -63,13 +63,14 @@ $prompt = [
     'rules' => [
         'ユーザーの希望を日本語で要約し、構成を提案する。',
         'purchaseItemsにはinternalCatalogに含まれるidだけを書く。架空IDや楽天の商品URLを購入商品として返さない。',
+        'CPUとマザーボードを一緒に提案する場合はplatform（Intel/AMD）と仕様のソケットが両方一致するものだけを選ぶ。',
         'RakutenReferencesは外部相場の参考情報に限り、購入用カタログとは別物として扱う。',
         '予算は税込合計の目安。無理に全額使わず、予算外ならその理由を書く。',
         '出力はJSON objectのみ。summary, imagePrompt, recommendations[{id,reason}], referenceNotesを含める。',
     ],
     'userAnswers' => $answers,
     'internalCatalog' => array_map(static fn(array $item): array => [
-        'id' => $item['id'], 'name' => $item['name'], 'maker' => $item['maker'], 'category' => $item['category'],
+        'id' => $item['id'], 'name' => $item['name'], 'maker' => $item['maker'], 'category' => $item['category'], 'platform' => $item['platform'],
         'price' => $item['price'], 'stock' => $item['stock'], 'specs' => $item['specs'], 'demoPrice' => $item['isDemoPrice'],
     ], $catalog),
     'rakutenReferences' => $references,
@@ -100,9 +101,40 @@ foreach (($proposal['recommendations'] ?? []) as $candidate) {
     if (!isset($byKey[$key])) continue;
     $recommended[] = $byKey[$key] + ['reason' => mb_substr((string)($candidate['reason'] ?? ''), 0, 300)];
 }
+$selectedCpu = null;
+foreach ($recommended as $item) {
+    if ($item['category'] === 'CPU') { $selectedCpu = $item; break; }
+}
+$compatibilityNote = '';
+if ($selectedCpu !== null) {
+    $cpuSocket = (string)($selectedCpu['specs']['ソケット'] ?? '');
+    foreach ($recommended as $index => $item) {
+        if ($item['category'] !== 'マザーボード') continue;
+        $boardSocket = (string)($item['specs']['ソケット'] ?? '');
+        $compatible = $item['platform'] === $selectedCpu['platform'] && ($cpuSocket === '' || $cpuSocket === $boardSocket);
+        if ($compatible) continue;
+        $replacement = null;
+        foreach ($catalog as $candidateBoard) {
+            if ($candidateBoard['category'] !== 'マザーボード' || $candidateBoard['platform'] !== $selectedCpu['platform']) continue;
+            $candidateSocket = (string)($candidateBoard['specs']['ソケット'] ?? '');
+            if ($cpuSocket !== '' && $candidateSocket !== $cpuSocket) continue;
+            $replacement = $candidateBoard;
+            break;
+        }
+        if ($replacement !== null) {
+            $recommended[$index] = $replacement + ['reason' => 'CPUとプラットフォーム・ソケットが一致するため選択'];
+        } else {
+            unset($recommended[$index]);
+            $compatibilityNote = '登録カタログに互換マザーボードが見つからなかったため、マザーボードは構成案から外しました。';
+        }
+    }
+    $recommended = array_values($recommended);
+}
 $total = array_sum(array_map(static fn(array $item): int => (int)$item['price'], $recommended));
+$summary = mb_substr((string)($proposal['summary'] ?? ''), 0, 1000);
+if ($compatibilityNote !== '') $summary = trim($summary . ' ' . $compatibilityNote);
 json_response([
-    'summary' => mb_substr((string)($proposal['summary'] ?? ''), 0, 1000),
+    'summary' => mb_substr($summary, 0, 1000),
     'imagePrompt' => mb_substr((string)($proposal['imagePrompt'] ?? ''), 0, 1000),
     'items' => $recommended,
     'totalPrice' => $total,

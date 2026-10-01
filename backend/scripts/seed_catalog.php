@@ -7,7 +7,7 @@ $pdo = new PDO($dsn, $config['user'], $config['password'], [PDO::ATTR_ERRMODE =>
 $seedPath = __DIR__ . '/../../database/seed_products.json';
 if (!is_file($seedPath)) $seedPath = '/var/www/database/seed_products.json';
 $items = json_decode(file_get_contents($seedPath) ?: '[]', true, 512, JSON_THROW_ON_ERROR);
-$statement = $pdo->prepare('INSERT IGNORE INTO products (catalog_key, name, short_name, maker, category, product_type, price, manufacturer_url, specs, is_demo_price, stock, description, is_active) VALUES (:catalog_key, :name, :short_name, :maker, :category, :product_type, :price, :manufacturer_url, :specs, :is_demo_price, :stock, :description, TRUE)');
+$statement = $pdo->prepare('INSERT IGNORE INTO products (catalog_key, name, short_name, maker, category, platform, product_type, price, manufacturer_url, specs, is_demo_price, stock, description, is_active) VALUES (:catalog_key, :name, :short_name, :maker, :category, :platform, :product_type, :price, :manufacturer_url, :specs, :is_demo_price, :stock, :description, TRUE)');
 foreach ($items as $item) {
     $statement->execute([
         'catalog_key' => $item['id'],
@@ -15,6 +15,7 @@ foreach ($items as $item) {
         'short_name' => $item['shortName'] ?? $item['name'],
         'maker' => $item['maker'] ?? '',
         'category' => $item['category'],
+        'platform' => $item['platform'] ?? '',
         'product_type' => $item['type'] ?? 'other',
         'price' => $item['price'],
         'manufacturer_url' => $item['manufacturerUrl'] ?? null,

@@ -253,6 +253,7 @@ img, svg { display: block; }
 .auth-form-wrap h2 { margin: 0 0 6px; color: var(--navy); font-size: 22px; }
 .auth-form-wrap > p { margin: 0 0 24px; color: var(--muted); font-size: 11px; }
 .form-field { display: block; margin-bottom: 14px; }
+.form-field[hidden] { display: none; }
 .form-field > span { display: block; margin-bottom: 6px; color: #46566c; font-size: 10px; font-weight: 700; }
 .form-field .input { min-height: 42px; }
 .form-field textarea { width: 100%; min-height: 75px; padding: 10px; resize: vertical; border: 1px solid #dbe3ed; border-radius: 5px; outline: 0; font: inherit; font-size: 11px; }

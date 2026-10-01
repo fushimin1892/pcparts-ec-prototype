@@ -98,6 +98,7 @@ function product_payload(array $row): array
         'name' => (string)$row['name'],
         'shortName' => (string)($row['short_name'] ?: $row['name']),
         'maker' => (string)$row['maker'],
+        'platform' => (string)($row['platform'] ?? ''),
         'category' => (string)$row['category'],
         'type' => (string)$row['product_type'],
         'price' => (int)$row['price'],
@@ -115,10 +116,24 @@ function clean_product(array $input): array
 {
     $name = trim((string)($input['name'] ?? ''));
     $category = trim((string)($input['category'] ?? ''));
+    $categories = [
+        'CPU' => 'cpu', 'GPU' => 'gpu', 'マザーボード' => 'board', 'SSD' => 'ssd',
+        'メモリ' => 'ram', 'CPUクーラー' => 'cooler', 'ファン' => 'fan',
+        'PCケース' => 'case', 'PC電源' => 'psu', 'その他' => 'other',
+    ];
+    $platform = trim((string)($input['platform'] ?? ''));
     $price = filter_var($input['price'] ?? null, FILTER_VALIDATE_INT);
     $stock = filter_var($input['stock'] ?? null, FILTER_VALIDATE_INT);
-    if ($name === '' || mb_strlen($name) > 255 || $category === '' || mb_strlen($category) > 80 || $price === false || $price < 0 || $price > 4294967295 || $stock === false || $stock < 0 || $stock > 4294967295) {
+    if ($name === '' || mb_strlen($name) > 255 || !isset($categories[$category]) || $price === false || $price < 0 || $price > 4294967295 || $stock === false || $stock < 0 || $stock > 4294967295) {
         json_response(['error' => '商品名・カテゴリ・価格・在庫の内容を確認してください。'], 422);
+    }
+    if (in_array($category, ['CPU', 'マザーボード'], true) && !in_array($platform, ['Intel', 'AMD'], true)) {
+        json_response(['error' => 'CPUとマザーボードにはIntelまたはAMDのプラットフォームを指定してください。'], 422);
+    }
+    if (!in_array($category, ['CPU', 'マザーボード'], true)) $platform = '';
+    $productType = $categories[$category];
+    if ($category === 'その他' && preg_match('/^[a-z0-9_-]{1,24}$/', (string)($input['type'] ?? ''))) {
+        $productType = (string)$input['type'];
     }
     $specs = $input['specs'] ?? new stdClass();
     if (!is_array($specs) && !is_object($specs)) json_response(['error' => '仕様は項目と値のオブジェクトで指定してください。'], 422);
@@ -132,7 +147,8 @@ function clean_product(array $input): array
         'short_name' => mb_substr(trim((string)($input['shortName'] ?? '')) ?: $name, 0, 120),
         'maker' => mb_substr(trim((string)($input['maker'] ?? '')), 0, 100),
         'category' => $category,
-        'product_type' => preg_match('/^[a-z0-9_-]{1,24}$/', (string)($input['type'] ?? 'other')) ? $input['type'] : 'other',
+        'platform' => $platform,
+        'product_type' => $productType,
         'price' => $price,
         'stock' => $stock,
         'description' => mb_substr(trim((string)($input['description'] ?? '')), 0, 2000),

@@ -1,22 +1,26 @@
 const products = [
-  { id: "gpu5070", name: "GeForce RTX 5070 White 12GB", shortName: "GeForce RTX 5070 White", maker: "ZOTAC", category: "グラフィックボード", price: 89800, stock: 8, type: "gpu", rating: 4.8, reviews: 34, description: "最新世代のGPUで、ARKの広大な世界もVALORANTの高フレームレートも快適に。ホワイトのファンカバーとARGBライティングを備えています。", specs: { "GPU": "GeForce RTX 5070", "メモリ": "12GB GDDR7", "出力端子": "HDMI / DisplayPort", "補助電源": "16ピン", "サイズ": "約300 mm" } },
-  { id: "gpu4060", name: "GeForce RTX 4060 8GB", shortName: "GeForce RTX 4060 8GB", maker: "NVIDIA", category: "グラフィックボード", price: 54800, stock: 8, type: "gpu", rating: 4.7, reviews: 42, description: "人気タイトルをフルHDで楽しめる、扱いやすいグラフィックボードです。", specs: { "GPU": "GeForce RTX 4060", "メモリ": "8GB GDDR6", "出力端子": "HDMI / DisplayPort", "補助電源": "8ピン", "サイズ": "約240 mm" } },
-  { id: "cpu7500f", name: "AMD Ryzen 5 7500F", shortName: "Ryzen 5 7500F", maker: "AMD", category: "CPU", price: 24980, stock: 12, type: "cpu", rating: 4.8, reviews: 27, description: "6コア12スレッドのAM5対応CPU。ゲーム向けPCのコストと性能のバランスに優れています。", specs: { "コア / スレッド": "6 / 12", "ソケット": "AM5", "最大クロック": "5.0 GHz", "TDP": "65 W" } },
-  { id: "cpu7700", name: "AMD Ryzen 7 7700", shortName: "Ryzen 7 7700", maker: "AMD", category: "CPU", price: 44800, stock: 9, type: "cpu", rating: 4.9, reviews: 51, description: "ゲーム配信や制作作業も見据えた8コア16スレッドのCPUです。", specs: { "コア / スレッド": "8 / 16", "ソケット": "AM5", "最大クロック": "5.3 GHz", "TDP": "65 W" } },
-  { id: "cooler240", name: "Frost Flow 240 White", shortName: "Frost Flow 240 White", maker: "Thermalright", category: "冷却パーツ", price: 9980, stock: 14, type: "cooler", rating: 4.6, reviews: 19, description: "白いラジエーターとARGBファンを採用した240 mm水冷CPUクーラー。", specs: { "タイプ": "簡易水冷", "ラジエーター": "240 mm", "対応ソケット": "AM5 / AM4 / LGA1851" } },
+  { id: "gpu5070", name: "GeForce RTX 5070 White 12GB", shortName: "GeForce RTX 5070 White", maker: "ZOTAC", category: "GPU", price: 89800, stock: 8, type: "gpu", rating: 4.8, reviews: 34, description: "最新世代のGPUで、ARKの広大な世界もVALORANTの高フレームレートも快適に。ホワイトのファンカバーとARGBライティングを備えています。", specs: { "GPU": "GeForce RTX 5070", "メモリ": "12GB GDDR7", "出力端子": "HDMI / DisplayPort", "補助電源": "16ピン", "サイズ": "約300 mm" } },
+  { id: "gpu4060", name: "GeForce RTX 4060 8GB", shortName: "GeForce RTX 4060 8GB", maker: "NVIDIA", category: "GPU", price: 54800, stock: 8, type: "gpu", rating: 4.7, reviews: 42, description: "人気タイトルをフルHDで楽しめる、扱いやすいグラフィックボードです。", specs: { "GPU": "GeForce RTX 4060", "メモリ": "8GB GDDR6", "出力端子": "HDMI / DisplayPort", "補助電源": "8ピン", "サイズ": "約240 mm" } },
+  { id: "cpu7500f", name: "AMD Ryzen 5 7500F", shortName: "Ryzen 5 7500F", maker: "AMD", platform: "AMD", category: "CPU", price: 24980, stock: 12, type: "cpu", rating: 4.8, reviews: 27, description: "6コア12スレッドのAM5対応CPU。ゲーム向けPCのコストと性能のバランスに優れています。", specs: { "コア / スレッド": "6 / 12", "ソケット": "AM5", "最大クロック": "5.0 GHz", "TDP": "65 W" } },
+  { id: "cpu7700", name: "AMD Ryzen 7 7700", shortName: "Ryzen 7 7700", maker: "AMD", platform: "AMD", category: "CPU", price: 44800, stock: 9, type: "cpu", rating: 4.9, reviews: 51, description: "ゲーム配信や制作作業も見据えた8コア16スレッドのCPUです。", specs: { "コア / スレッド": "8 / 16", "ソケット": "AM5", "最大クロック": "5.3 GHz", "TDP": "65 W" } },
+  { id: "cooler240", name: "Frost Flow 240 White", shortName: "Frost Flow 240 White", maker: "Thermalright", category: "CPUクーラー", price: 9980, stock: 14, type: "cooler", rating: 4.6, reviews: 19, description: "白いラジエーターとARGBファンを採用した240 mm水冷CPUクーラー。", specs: { "タイプ": "簡易水冷", "ラジエーター": "240 mm", "対応ソケット": "AM5 / AM4 / LGA1851" } },
   { id: "ram32white", name: "VENGEANCE RGB DDR5 32GB White", shortName: "VENGEANCE RGB DDR5-5600", maker: "Corsair", category: "メモリ", price: 13980, stock: 16, type: "ram", rating: 4.8, reviews: 30, description: "白いヒートスプレッダーとRGBライティングが映えるDDR5メモリ。", specs: { "容量": "32GB (16GB × 2)", "規格": "DDR5-5600", "カラー": "ホワイト" } },
   { id: "ram32", name: "VENGEANCE DDR5 32GB", shortName: "Corsair 32GB DDR5-5600", maker: "Corsair", category: "メモリ", price: 12800, stock: 20, type: "ram", rating: 4.7, reviews: 26, description: "ゲーム用PCの標準的な容量を備えたDDR5メモリです。", specs: { "容量": "32GB (16GB × 2)", "規格": "DDR5-5600", "カラー": "ブラック" } },
-  { id: "ssd2tb", name: "WD_BLACK SN770 NVMe SSD 2TB", shortName: "WD_BLACK SN770 2TB", maker: "Western Digital", category: "ストレージ", price: 14980, stock: 21, type: "ssd", rating: 4.8, reviews: 38, description: "大容量のゲームライブラリを保存できる、M.2 NVMe SSDです。", specs: { "容量": "2TB", "規格": "M.2 2280", "インターフェース": "PCIe Gen4 x4" } },
-  { id: "boardb650", name: "B650M AORUS ELITE AX ICE", shortName: "B650M AORUS ELITE AX ICE", maker: "GIGABYTE", category: "マザーボード", price: 16800, stock: 10, type: "board", rating: 4.6, reviews: 17, description: "白いヒートシンクを採用したAM5対応マザーボードです。", specs: { "チップセット": "AMD B650", "ソケット": "AM5", "フォームファクタ": "Micro ATX", "無線": "Wi-Fi 6E" } },
-  { id: "psu750", name: "750W 80PLUS Gold White", shortName: "750W Gold White", maker: "Cooler Master", category: "電源", price: 11980, stock: 11, type: "psu", rating: 4.7, reviews: 15, description: "安定した電力供給を支える750W電源。白いケースにも合わせやすいカラーです。", specs: { "出力": "750 W", "認証": "80PLUS Gold", "規格": "ATX 3.0" } },
+  { id: "ssd2tb", name: "WD_BLACK SN770 NVMe SSD 2TB", shortName: "WD_BLACK SN770 2TB", maker: "Western Digital", category: "SSD", price: 14980, stock: 21, type: "ssd", rating: 4.8, reviews: 38, description: "大容量のゲームライブラリを保存できる、M.2 NVMe SSDです。", specs: { "容量": "2TB", "規格": "M.2 2280", "インターフェース": "PCIe Gen4 x4" } },
+  { id: "boardb650", name: "B650M AORUS ELITE AX ICE", shortName: "B650M AORUS ELITE AX ICE", maker: "GIGABYTE", platform: "AMD", category: "マザーボード", price: 16800, stock: 10, type: "board", rating: 4.6, reviews: 17, description: "白いヒートシンクを採用したAM5対応マザーボードです。", specs: { "チップセット": "AMD B650", "ソケット": "AM5", "フォームファクタ": "Micro ATX", "無線": "Wi-Fi 6E" } },
+  { id: "fan120rgb", name: "120mm ARGB ケースファン White", shortName: "120mm ARGB Fan White", maker: "PC PARTS SHOP", category: "ファン", price: 1980, stock: 20, type: "fan", rating: 0, reviews: 0, isDemoPrice: true, description: "ケース内のエアフローを整える、白色フレームの120mm ARGBファンです。", specs: { "サイズ": "120 × 120 × 25 mm", "回転数": "800–1800 rpm", "コネクター": "4-pin PWM / 3-pin ARGB", "カラー": "ホワイト" } },
+  { id: "psu750", name: "750W 80PLUS Gold White", shortName: "750W Gold White", maker: "Cooler Master", category: "PC電源", price: 11980, stock: 11, type: "psu", rating: 4.7, reviews: 15, description: "安定した電力供給を支える750W電源。白いケースにも合わせやすいカラーです。", specs: { "出力": "750 W", "認証": "80PLUS Gold", "規格": "ATX 3.0" } },
   { id: "casewhite", name: "H5 Flow White RGB", shortName: "NZXT H5 Flow White", maker: "NZXT", category: "PCケース", price: 16980, stock: 7, type: "case", rating: 4.8, reviews: 23, description: "強化ガラスとRGBファンで、パーツが見える白いミドルタワーケースです。", specs: { "フォームファクタ": "ミドルタワー", "対応マザー": "ATX / Micro ATX / Mini-ITX", "カラー": "ホワイト", "側面": "強化ガラス" } },
   { id: "caseblack", name: "H5 Flow Black", shortName: "NZXT H5 Flow", maker: "NZXT", category: "PCケース", price: 14800, stock: 12, type: "case", rating: 4.6, reviews: 18, description: "エアフローを重視したシンプルなミドルタワーケースです。", specs: { "フォームファクタ": "ミドルタワー", "対応マザー": "ATX / Micro ATX / Mini-ITX", "カラー": "ブラック" } },
-  { id: "monitor24", name: "24-inch Gaming Monitor 180Hz", shortName: "24インチ 180Hz ゲーミングモニター", maker: "PC PARTS SHOP", category: "モニター", price: 18980, stock: 6, type: "monitor", rating: 4.6, reviews: 12, description: "VALORANTなどの対戦ゲームにも使いやすい、フルHD・高リフレッシュレートのモニターです。", specs: { "サイズ": "24インチ", "解像度": "1920 × 1080", "リフレッシュレート": "180 Hz", "入力端子": "HDMI / DisplayPort" } },
+  { id: "monitor24", name: "24-inch Gaming Monitor 180Hz", shortName: "24インチ 180Hz ゲーミングモニター", maker: "PC PARTS SHOP", category: "その他", price: 18980, stock: 6, type: "monitor", rating: 4.6, reviews: 12, description: "VALORANTなどの対戦ゲームにも使いやすい、フルHD・高リフレッシュレートのモニターです。", specs: { "サイズ": "24インチ", "解像度": "1920 × 1080", "リフレッシュレート": "180 Hz", "入力端子": "HDMI / DisplayPort" } },
 ];
 
 const categoryItems = [
-  ["CPU", "▦"], ["グラフィックボード", "▣"], ["マザーボード", "▤"], ["メモリ", "▰"], ["ストレージ", "▱"], ["冷却パーツ", "❋"], ["PCケース", "▥"], ["電源", "ϟ"], ["モニター", "▰"],
+  ["CPU", "▦"], ["GPU", "▣"], ["マザーボード", "▤"], ["SSD", "▱"], ["メモリ", "▰"], ["CPUクーラー", "❋"], ["ファン", "◉"], ["PCケース", "▥"], ["PC電源", "ϟ"], ["その他", "＋"],
 ];
+const platformCategories = new Set(["CPU", "マザーボード"]);
+const platformOptions = ["Intel", "AMD"];
+const legacyCategories = { "グラフィックボード": "GPU", "ストレージ": "SSD", "冷却パーツ": "CPUクーラー", "電源": "PC電源", "モニター": "その他" };
 
 const storage = {
   get(key, fallback) { try { const value = localStorage.getItem(key); return value ? JSON.parse(value) : fallback; } catch { return fallback; } },
@@ -45,7 +49,7 @@ async function apiRequest(path, options = {}) {
 function normalizeApiProduct(product) {
   return {
     id: String(product.id), name: String(product.name || ""), shortName: String(product.shortName || product.name || ""),
-    maker: String(product.maker || ""), category: String(product.category || "その他"), type: String(product.type || "other"),
+    maker: String(product.maker || ""), platform: String(product.platform || ""), category: String(product.category || "その他"), type: String(product.type || "other"),
     price: Number(product.price) || 0, stock: Number(product.stock) || 0, rating: Number(product.rating) || 0,
     reviews: Number(product.reviews) || 0, description: String(product.description || ""),
     specs: product.specs && typeof product.specs === "object" ? product.specs : {},
@@ -76,7 +80,7 @@ async function refreshServerCatalog() {
 
 function cpuSeed({ id, name, price, cores, threads, boost, base, cache, tdp, socket, memory, graphics, cooler, generation, manufacturerUrl }) {
   return {
-    id, name, shortName: name, maker: id.startsWith("intel-") ? "Intel" : "AMD", category: "CPU", price,
+    id, name, shortName: name, maker: id.startsWith("intel-") ? "Intel" : "AMD", platform: id.startsWith("intel-") ? "Intel" : "AMD", category: "CPU", price,
     stock: 5, type: "cpu", rating: 0, reviews: 0, isDemoPrice: true,
     description: `${generation}のデスクトップCPUです。主要仕様はメーカー公表情報を登録しています。表示価格と在庫は試作用の仮設定です。`,
     specs: {
@@ -124,6 +128,7 @@ for (const cpu of seededCpuProducts) {
 }
 const savedCatalog = storage.get("pcparts-products", null);
 const catalogVersion = storage.get("pcparts-catalog-version", 0);
+const fanSeedProduct = products.find((product) => product.id === "fan120rgb");
 if (Array.isArray(savedCatalog)) {
   products.splice(0, products.length, ...savedCatalog);
   if (catalogVersion < 1) {
@@ -134,13 +139,28 @@ if (Array.isArray(savedCatalog)) {
   }
 } else {
   storage.set("pcparts-products", products);
-  storage.set("pcparts-catalog-version", 1);
+  storage.set("pcparts-catalog-version", 2);
 }
 let catalogNeedsPriceFlagSave = false;
+if (Array.isArray(savedCatalog) && catalogVersion < 2 && fanSeedProduct && !products.some((product) => product.id === fanSeedProduct.id)) {
+  products.push(fanSeedProduct);
+  catalogNeedsPriceFlagSave = true;
+}
 for (const product of products) {
   if (typeof product.isDemoPrice !== "boolean") { product.isDemoPrice = true; catalogNeedsPriceFlagSave = true; }
+  if (legacyCategories[product.category]) { product.category = legacyCategories[product.category]; catalogNeedsPriceFlagSave = true; }
+  if (platformCategories.has(product.category)) {
+    const specs = product.specs || {};
+    const chipset = String(specs["チップセット"] || "");
+    const socket = String(specs["ソケット"] || "");
+    const detectedPlatform = /intel|lga/i.test(`${product.name} ${product.maker} ${chipset} ${socket}`) ? "Intel" : /amd|am[45]/i.test(`${product.name} ${chipset} ${socket}`) || product.maker === "AMD" ? "AMD" : "";
+    if ((detectedPlatform && product.platform !== detectedPlatform) || (!platformOptions.includes(product.platform) && product.platform !== "")) { product.platform = detectedPlatform; catalogNeedsPriceFlagSave = true; }
+  } else if (product.platform) { product.platform = ""; catalogNeedsPriceFlagSave = true; }
 }
-if (catalogNeedsPriceFlagSave) storage.set("pcparts-products", products);
+if (catalogNeedsPriceFlagSave) {
+  storage.set("pcparts-products", products);
+  storage.set("pcparts-catalog-version", 2);
+} else if (Array.isArray(savedCatalog) && catalogVersion < 2) storage.set("pcparts-catalog-version", 2);
 
 let cart = storage.get("pcparts-cart", {});
 let favorites = storage.get("pcparts-favorites", []);
@@ -149,6 +169,7 @@ let orders = storage.get("pcparts-orders", []);
 let catalogFilter = { category: "すべて", query: "", min: "", max: "", sort: "おすすめ順" };
 let adminQuery = "";
 let adminCategory = "すべて";
+let adminPlatform = "すべて";
 let detailQuantity = 1;
 let wizardStep = 0;
 let wizardAnswers = { budget: "", use: "", games: "", style: "", equipment: "", conditions: "" };
@@ -288,7 +309,7 @@ function getFilteredProducts() {
 }
 
 function categoryCards() {
-  return categoryItems.map(([name, icon]) => `<button class="category-card ${catalogFilter.category === name ? "is-active" : ""}" data-category="${name}"><span class="category-card__icon">${icon}</span><span>${name}</span></button>`).join("");
+  return categoryItems.filter(([name]) => name !== "その他").map(([name, icon]) => `<button class="category-card ${catalogFilter.category === name ? "is-active" : ""}" data-category="${name}"><span class="category-card__icon">${icon}</span><span>${name}</span></button>`).join("");
 }
 
 function renderHome() {
@@ -397,7 +418,7 @@ function renderFavorites() {
   app.innerHTML = `${breadcrumb("お気に入り", "")}<div class="page-heading"><div><span class="eyebrow">SAVED PARTS</span><h1>お気に入り</h1><p>気になるパーツをまとめて比較できます。</p></div><button class="text-link" data-go="home">商品を探す →</button></div>${selected.length ? `<div class="favorites-grid">${selected.map((product) => productCard(product, true)).join("")}</div>` : `<div class="panel empty-state"><div class="empty-state__icon">♡</div><h2>お気に入りはまだありません</h2><p>商品ページのハートを押すと、ここに保存されます。</p><button class="button" data-go="home">商品を探す</button></div>`}`;
 }
 
-function renderAdmin() {
+function renderAdminContent() {
   if (apiConfigured && !adminStatusChecked) {
     app.innerHTML = `<div class="panel empty-state"><h2>管理者セッションを確認中</h2><p>しばらくお待ちください。</p></div>`;
     if (!adminStatusChecking) {
@@ -411,13 +432,53 @@ function renderAdmin() {
   }
   if (apiConfigured && !adminAuthenticated) { go("admin-login"); return; }
   const query = adminQuery.trim().toLowerCase();
-  const shown = products.filter((product) => (adminCategory === "すべて" || product.category === adminCategory) && (!query || `${product.name} ${product.maker} ${product.category}`.toLowerCase().includes(query)));
+  const shown = products.filter((product) => (adminCategory === "すべて" || product.category === adminCategory) && (adminPlatform === "すべて" || product.platform === adminPlatform) && (!query || `${product.name} ${product.maker} ${product.platform || ""} ${product.category}`.toLowerCase().includes(query)));
   app.innerHTML = `${breadcrumb("商品管理", "管理者ページ")}<div class="page-heading"><div><span class="eyebrow">SHOP MANAGEMENT</span><h1>商品管理</h1><p>登録した商品は商品一覧とカートに表示されます。</p></div></div><div class="admin-toolbar"><div class="admin-toolbar__copy"><strong>登録商品一覧</strong><small>${shown.length} 件を表示（全 ${products.length} 件） / ${apiConfigured ? "MySQLカタログに保存" : "このブラウザに保存"}</small></div><div class="admin-toolbar-actions"><button class="button" data-action="admin-add">＋ 商品を登録</button><button class="button button--outline" data-action="admin-logout">ログアウト</button></div></div><form id="admin-filter-form" class="filter-controls admin-filter"><input class="field" name="query" type="search" placeholder="商品名・メーカーで検索" value="${safeText(adminQuery)}"><select class="select" name="category"><option ${adminCategory === "すべて" ? "selected" : ""}>すべて</option>${categoryItems.map(([name]) => `<option ${adminCategory === name ? "selected" : ""}>${safeText(name)}</option>`).join("")}</select><button class="button button--outline" type="submit">検索</button></form><div class="table-wrap"><table class="data-table"><thead><tr><th>商品情報</th><th>カテゴリ</th><th>価格</th><th>在庫数</th><th>操作</th></tr></thead><tbody>${shown.map((product) => `<tr><td><div class="table-product">${artFor(product.type, product.shortName)}<span><strong>${safeText(product.name)}</strong><small>${safeText(product.maker)}${product.isDemoPrice ? " ・仮価格" : ""}</small></span></div></td><td>${safeText(product.category)}</td><td>${yen(product.price)}</td><td>${Number(product.stock) || 0}</td><td><div class="table-actions"><button class="button button--outline" data-action="admin-edit" data-id="${safeText(product.id)}">編集</button><button class="button button--danger" data-action="admin-delete" data-id="${safeText(product.id)}">削除</button></div></td></tr>`).join("") || `<tr><td colspan="5">条件に合う商品がありません。</td></tr>`}</tbody></table></div>`;
+}
+
+function enhanceAdminScreen() {
+  const filter = document.querySelector("#admin-filter-form");
+  const table = document.querySelector(".data-table");
+  if (!filter || !table) return;
+  const platformFilter = document.createElement("select");
+  platformFilter.className = "select";
+  platformFilter.name = "platform";
+  platformFilter.setAttribute("aria-label", "CPU・マザーボードのプラットフォーム");
+  platformFilter.innerHTML = `<option value="すべて">Intel / AMDすべて</option>${platformOptions.map((value) => `<option value="${value}">${value}</option>`).join("")}`;
+  platformFilter.value = adminPlatform;
+  filter.querySelector("button[type='submit']")?.before(platformFilter);
+
+  const header = table.tHead?.rows[0];
+  if (header) {
+    const platformHeader = document.createElement("th");
+    platformHeader.textContent = "プラットフォーム";
+    header.cells[1]?.after(platformHeader);
+  }
+  const query = adminQuery.trim().toLowerCase();
+  const shown = products.filter((product) => (adminCategory === "すべて" || product.category === adminCategory) && (adminPlatform === "すべて" || product.platform === adminPlatform) && (!query || `${product.name} ${product.maker} ${product.platform || ""} ${product.category}`.toLowerCase().includes(query)));
+  const rows = table.tBodies[0]?.rows || [];
+  if (shown.length) {
+    shown.forEach((product, index) => {
+      const platformCell = document.createElement("td");
+      if (platformCategories.has(product.category)) {
+        const socket = String(product.specs?.["ソケット"] || "");
+        platformCell.textContent = `${product.platform || "未設定"}${socket ? ` · ${socket}` : ""}`;
+      } else platformCell.textContent = "—";
+      rows[index]?.cells[1]?.after(platformCell);
+    });
+  } else if (rows[0]?.cells[0]) rows[0].cells[0].colSpan = 6;
+  const description = document.querySelector(".page-heading p");
+  if (description) description.textContent = "CPUとマザーボードはIntel / AMD別に管理できます。ソケットの違いも仕様欄で確認してください。";
+}
+
+function renderAdmin() {
+  renderAdminContent();
+  enhanceAdminScreen();
 }
 
 function persistCatalog() {
   storage.set("pcparts-products", products);
-  storage.set("pcparts-catalog-version", 1);
+  storage.set("pcparts-catalog-version", 2);
 }
 
 function adminProductForm(product = null) {
@@ -498,6 +559,11 @@ function renderAiResult() {
     ? `入力した目安は${yen(budget)}です。商品価格の合計と見比べてください。`
     : "予算の数字を読み取れなかったため、約20万円を仮の目安にしています。条件を変えて再相談できます。";
   app.innerHTML = `${breadcrumb("AIおすすめ構成", "AI構成相談")}<div class="page-heading"><div><span class="eyebrow">YOUR PERSONAL BUILD</span><h1>あなたにおすすめの構成</h1><p>${safeText(shortAnswer(wizardAnswers.use || "用途未指定"))}向けに、${serverAiProposal ? "AIが自社カタログの商品から構成を提案しました。" : "入力された条件を見ながらサンプル構成を作りました。"}</p></div><button class="text-link" data-action="restart-wizard">条件を変えて相談する ↗</button></div><section class="panel recommendation-overview"><div class="recommendation-summary"><div class="recommendation-summary__top"><span class="recommendation-spark">✳</span><span>${safeText(serverAiProposal?.summary || "いただいた希望をもとにした構成案です。")}</span></div><div class="recommendation-chips"><span>予算：${safeText(shortAnswer(budgetLabel))}</span>${requestChips}</div><div class="recommendation-summary__note">${safeText(monitorNote)}</div></div><div class="pc-scene-wrap"><div class="pc-scene-heading"><span class="badge badge--blue">PCイメージ（SVGプレビュー）</span><span class="recommendation-caption">入力したデザイン希望を反映</span></div>${pcSceneSvg()}</div></section><section class="recommendation-parts"><div class="section-heading"><div><span class="eyebrow">RECOMMENDED PARTS</span><h2>おすすめパーツ</h2><p>${serverAiProposal ? "AIが自社カタログから選んだ商品です。" : "入力内容から選んだデモ商品で構成しています。"}</p></div><span class="badge ${isOverBudget ? "badge--warning" : ""}">${isOverBudget ? "予算を超えています" : "予算の目安内"}</span></div><div class="recommendation-grid">${selection.map((product) => `<article class="recommendation-part"><div class="recommendation-part__visual">${artFor(product.type, product.shortName)}</div><span class="product-category">${safeText(product.category)}</span><strong>${safeText(product.name)}</strong><span class="recommendation-part__reason">${safeText(serverAiProposal?.items?.find((item) => item.id === product.id)?.reason || (product.id === "gpu5070" ? "ゲーム性能を重視" : product.id === "gpu4060" ? "価格を抑えたGPU" : product.id === "casewhite" ? "白いガラスケース" : product.id === "caseblack" ? "落ち着いた黒いケース" : product.id === "ram32white" ? "白いRGBメモリ" : product.id === "cooler240" ? "冷却パーツ" : product.id === "boardb650" ? "Wi-Fi対応マザーボード" : product.id === "monitor24" ? "モニター未所持の方向け" : product.id === "cpu7700" ? "制作・配信も見据えたCPU" : "構成バランスを重視"))}</span><div class="recommendation-part__bottom"><span class="price">${yen(product.price)}</span><button class="button button--outline button--small" data-go="detail" data-id="${safeText(product.id)}">商品を見る</button></div></article>`).join("")}</div><div class="recommendation-total panel"><div><span>おすすめ構成の合計目安</span><small>※${safeText(budgetNote)} 初期登録CPUなど一部は試作価格です。商品情報の互換性確認は未実装です。</small></div><strong>${yen(total)}<small>（税込）</small></strong></div><div class="recommendation-actions"><button class="button" data-action="add-build" data-ids="${selection.map((product) => safeText(product.id)).join(",")}">▱ この構成をカートに追加</button><button class="button button--outline" data-go="home">商品一覧を見る</button></div></section><div class="followup-strip"><span>✳ 条件を少し変えてみますか？</span><button data-action="adjust-budget">予算を少し抑えたい</button><button data-action="restart-wizard">別の条件で相談</button><button data-go="home">パーツを自分で選びたい</button></div>`;
+  const compatibilityDisclosure = document.querySelector(".recommendation-total small");
+  if (compatibilityDisclosure) {
+    const currentNote = compatibilityDisclosure.textContent.replace("商品情報の互換性確認は未実装です。", "").trim();
+    compatibilityDisclosure.textContent = `${currentNote} CPUとマザーボードのプラットフォーム・ソケットは照合します。その他パーツ間の完全な互換性保証はありません。`;
+  }
   const references = serverAiProposal?.references || [];
   if (references.length) {
     const referenceSection = document.createElement("section");
@@ -542,6 +608,37 @@ function renderRoute() {
 
 function openModal(title, body) {
   document.querySelector("#modal-root").innerHTML = `<div class="modal-backdrop" data-action="close-modal"><section class="modal" role="dialog" aria-modal="true" aria-label="${safeText(title)}"><div class="modal__head"><h2>${safeText(title)}</h2><button class="modal-close" data-action="close-modal" aria-label="閉じる">×</button></div><div class="modal__body">${body}</div></section></div>`;
+  enhanceAdminProductForm();
+}
+
+function enhanceAdminProductForm() {
+  const form = document.querySelector("#admin-product-form");
+  const category = form?.elements.namedItem("category");
+  const categoryLabel = category?.closest(".form-field");
+  if (!form || !category || !categoryLabel) return;
+  const makerLabel = form.elements.namedItem("maker")?.closest(".form-field");
+  const specsLabel = form.elements.namedItem("specs")?.closest(".form-field");
+  if (makerLabel?.querySelector("span")) makerLabel.querySelector("span").textContent = "メーカー（商品ブランド）";
+  if (specsLabel?.querySelector("span")) specsLabel.querySelector("span").textContent = "仕様（ソケット名も記入）";
+  [...category.options].filter((option) => option.value === "その他").slice(1).forEach((option) => option.remove());
+  let field = form.querySelector("#product-platform-field");
+  if (!field) {
+    field = document.createElement("label");
+    field.className = "form-field";
+    field.id = "product-platform-field";
+    field.innerHTML = `<span>プラットフォーム *</span><select class="select" name="platform"><option value="">選択してください</option>${platformOptions.map((value) => `<option value="${value}">${value}</option>`).join("")}</select><small class="form-hint">CPUソケット / マザーボードの対応メーカーを選びます。</small>`;
+    categoryLabel.after(field);
+    const savedProduct = findProduct(form.dataset.id);
+    if (savedProduct?.platform) field.querySelector("select").value = savedProduct.platform;
+  }
+  const platformSelect = field.querySelector("select");
+  const update = () => {
+    const required = platformCategories.has(category.value);
+    field.hidden = !required;
+    platformSelect.disabled = !required;
+    platformSelect.required = required;
+  };
+  update();
 }
 
 function openDrawer() {
@@ -562,15 +659,17 @@ function productFormValues(form) {
     if (separator > 0) { const key = line.slice(0, separator).trim(); const value = line.slice(separator + 1).trim(); if (key && value) specs[key] = value; }
   }
   const category = String(data.get("category") || "その他");
-  const typeByCategory = { "CPU": "cpu", "グラフィックボード": "gpu", "マザーボード": "board", "メモリ": "ram", "ストレージ": "ssd", "冷却パーツ": "cooler", "PCケース": "case", "電源": "psu", "モニター": "monitor" };
+  const typeByCategory = { "CPU": "cpu", "GPU": "gpu", "マザーボード": "board", "SSD": "ssd", "メモリ": "ram", "CPUクーラー": "cooler", "ファン": "fan", "PCケース": "case", "PC電源": "psu", "その他": "other" };
   const name = String(data.get("name") || "").trim();
+  const platform = String(data.get("platform") || "");
   const price = Number(data.get("price"));
   const stock = Number(data.get("stock"));
   if (!name || !Number.isSafeInteger(price) || price < 0 || !Number.isSafeInteger(stock) || stock < 0) throw new Error("商品名・価格・在庫数を確認してください");
+  if (platformCategories.has(category) && !platformOptions.includes(platform)) throw new Error("CPUとマザーボードはIntel / AMDを選択してください");
   return {
     id: form.dataset.id || `catalog-${Date.now().toString(36)}`, name,
     shortName: String(data.get("shortName") || "").trim() || name,
-    maker: String(data.get("maker") || "").trim() || "メーカー未設定", category, type: typeByCategory[category] || "other",
+    maker: String(data.get("maker") || "").trim() || "メーカー未設定", platform, category, type: category === "その他" ? (findProduct(form.dataset.id)?.type || "other") : (typeByCategory[category] || "other"),
     price, stock, rating: 0, reviews: 0, description: String(data.get("description") || "").trim() || "商品説明は準備中です。",
     specs, manufacturerUrl: String(data.get("manufacturerUrl") || "").trim(), isDemoPrice: data.has("demoPrice"),
   };
@@ -662,6 +761,12 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("change", (event) => {
   if (event.target.id === "sort-select") { catalogFilter.sort = event.target.value; renderHome(); }
+  if (event.target.closest("#admin-product-form") && event.target.name === "category") {
+    const field = document.querySelector("#product-platform-field");
+    const platform = field?.querySelector("select[name='platform']");
+    const required = platformCategories.has(event.target.value);
+    if (field && platform) { field.hidden = !required; platform.disabled = !required; platform.required = required; }
+  }
 });
 
 document.addEventListener("submit", (event) => {
@@ -671,7 +776,7 @@ document.addEventListener("submit", (event) => {
     const data = new FormData(form); catalogFilter.min = data.get("min") || ""; catalogFilter.max = data.get("max") || ""; catalogFilter.category = data.get("category") || "すべて"; catalogFilter.query = data.get("query") || ""; renderHome();
   }
   if (form.id === "admin-filter-form") {
-    const data = new FormData(form); adminQuery = String(data.get("query") || ""); adminCategory = String(data.get("category") || "すべて"); renderAdmin();
+    const data = new FormData(form); adminQuery = String(data.get("query") || ""); adminCategory = String(data.get("category") || "すべて"); adminPlatform = String(data.get("platform") || "すべて"); renderAdmin();
   }
   if (form.id === "admin-product-form") {
     submitAdminProduct(form);

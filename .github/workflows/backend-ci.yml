@@ -45,6 +45,21 @@ jobs:
           extensions: curl, mbstring, pdo_mysql
       - name: Lint PHP files
         run: find backend -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Verify existing-database migration
+        run: |
+          mysql --host=127.0.0.1 --port=3306 --user=root --password=ci-root-password <<'SQL'
+          CREATE DATABASE pc_parts_shop DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+          USE pc_parts_shop;
+          CREATE TABLE products (name VARCHAR(255) NOT NULL, maker VARCHAR(100) NOT NULL, category VARCHAR(80) NOT NULL, specs JSON NULL);
+          INSERT INTO products (name, maker, category, specs) VALUES
+            ('AMD Ryzen 7 7700', 'AMD', 'CPU', JSON_OBJECT('ソケット', 'AM5')),
+            ('Intel Core Ultra 7 265K', 'Intel', 'CPU', JSON_OBJECT('ソケット', 'LGA1851')),
+            ('B650 board', 'GIGABYTE', 'マザーボード', JSON_OBJECT('チップセット', 'AMD B650', 'ソケット', 'AM5')),
+            ('RTX 5070', 'ZOTAC', 'グラフィックボード', JSON_OBJECT());
+          SQL
+          mysql --host=127.0.0.1 --port=3306 --user=root --password=ci-root-password < database/migrations/20261001_categories_platform.sql
+          mysql --host=127.0.0.1 --port=3306 --user=root --password=ci-root-password --batch --skip-column-names -e "SELECT COUNT(*) FROM pc_parts_shop.products WHERE (category='CPU' AND platform IN ('Intel','AMD')) OR (category='マザーボード' AND platform='AMD') OR category='GPU'" | grep -qx 4
+          mysql --host=127.0.0.1 --port=3306 --user=root --password=ci-root-password -e 'DROP DATABASE pc_parts_shop'
       - name: Create schema and seed catalog
         run: |
           mysql --host=127.0.0.1 --port=3306 --user=root --password=ci-root-password < database/schema.sql
@@ -60,10 +75,12 @@ jobs:
           done
           php -r '$h=json_decode(file_get_contents("/tmp/health.json"), true); if (($h["database"] ?? "") !== "connected") exit(1);'
           curl -sS -o /tmp/unauthorized.json -w '%{http_code}' -X POST http://127.0.0.1:8080/api/products.php -H 'Content-Type: application/json' -d '{}' | grep -qx 401
-          php -r '$r=json_decode(file_get_contents("http://127.0.0.1:8080/api/products.php"), true); $n=count(array_filter($r["items"] ?? [], fn($p) => $p["category"] === "CPU")); if ($n < 28) { fwrite(STDERR, "Expected 28 seeded CPUs; found $n\n"); exit(1); } echo "Public catalog CPUs: $n\n";'
+          php -r '$r=json_decode(file_get_contents("http://127.0.0.1:8080/api/products.php"), true); $items=$r["items"] ?? []; $n=count(array_filter($items, fn($p) => $p["category"] === "CPU")); $intel=count(array_filter($items, fn($p) => $p["category"] === "CPU" && $p["platform"] === "Intel")); $amd=count(array_filter($items, fn($p) => $p["category"] === "CPU" && $p["platform"] === "AMD")); $categories=array_unique(array_column($items, "category")); if (count($items) !== 40 || $n !== 28 || !$intel || !$amd || !in_array("ファン", $categories, true)) { fwrite(STDERR, "Catalog taxonomy or platform seed mismatch\n"); exit(1); } echo "Public catalog: " . count($items) . " products, $n CPUs ($intel Intel / $amd AMD)\n";'
+          php -r '$r=json_decode(file_get_contents("http://127.0.0.1:8080/api/products.php?platform=Intel"), true); foreach (($r["items"] ?? []) as $p) if ($p["platform"] !== "Intel") exit(1);'
           php backend/scripts/create_admin.php ci@example.test 'CI Admin'
           curl -fsS -c /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"email":"ci@example.test","password":"ci-only-test-password-012345"}' http://127.0.0.1:8080/api/admin/login.php | grep -q '"ok":true'
           curl -fsS -b /tmp/pcparts-cookie.txt http://127.0.0.1:8080/api/admin/status.php | grep -q '"authenticated":true'
-          curl -fsS -b /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"id":"ci-smoke-product","name":"CI smoke product","shortName":"CI smoke","maker":"CI","category":"CPU","type":"cpu","price":1,"stock":1,"description":"CI only","specs":{},"isDemoPrice":true}' http://127.0.0.1:8080/api/products.php | grep -q 'ci-smoke-product'
-          curl -fsS -b /tmp/pcparts-cookie.txt -X PUT -H 'Content-Type: application/json' -d '{"name":"CI smoke product updated","shortName":"CI smoke","maker":"CI","category":"CPU","type":"cpu","price":2,"stock":1,"description":"CI only","specs":{},"isDemoPrice":true}' 'http://127.0.0.1:8080/api/products.php?id=ci-smoke-product' | grep -q '"price":2'
+          curl -sS -o /tmp/missing-platform.json -w '%{http_code}' -b /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"id":"ci-missing-platform","name":"Missing platform","category":"CPU","price":1,"stock":1}' http://127.0.0.1:8080/api/products.php | grep -qx 422
+          curl -fsS -b /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"id":"ci-smoke-product","name":"CI smoke product","shortName":"CI smoke","maker":"AMD","platform":"AMD","category":"CPU","type":"cpu","price":1,"stock":1,"description":"CI only","specs":{"ソケット":"AM5"},"isDemoPrice":true}' http://127.0.0.1:8080/api/products.php | grep -q 'ci-smoke-product'
+          curl -fsS -b /tmp/pcparts-cookie.txt -X PUT -H 'Content-Type: application/json' -d '{"name":"CI smoke product updated","shortName":"CI smoke","maker":"AMD","platform":"AMD","category":"CPU","type":"cpu","price":2,"stock":1,"description":"CI only","specs":{"ソケット":"AM5"},"isDemoPrice":true}' 'http://127.0.0.1:8080/api/products.php?id=ci-smoke-product' | grep -q '"price":2'
           curl -fsS -b /tmp/pcparts-cookie.txt -X DELETE 'http://127.0.0.1:8080/api/products.php?id=ci-smoke-product' | grep -q '"deleted":true'

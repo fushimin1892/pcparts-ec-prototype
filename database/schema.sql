@@ -21,6 +21,7 @@ CREATE TABLE products (
   short_name VARCHAR(120) NOT NULL DEFAULT '',
   maker VARCHAR(100) NOT NULL DEFAULT '',
   category VARCHAR(80) NOT NULL,
+  platform VARCHAR(16) NOT NULL DEFAULT '',
   product_type VARCHAR(24) NOT NULL DEFAULT 'other',
   price INT UNSIGNED NOT NULL,
   image_url VARCHAR(1000) NULL,
@@ -34,6 +35,7 @@ CREATE TABLE products (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_products_category_price (category, price),
+  INDEX idx_products_platform_category (platform, category),
   INDEX idx_products_name (name)
 );
 
