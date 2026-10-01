@@ -174,6 +174,7 @@ let detailQuantity = 1;
 let wizardStep = 0;
 let wizardAnswers = { budget: "", use: "", games: "", style: "", equipment: "", conditions: "" };
 let lastOrder = null;
+let selectedPayment = "card";
 
 const app = document.querySelector("#app");
 const yen = (value) => `¥${Number(value).toLocaleString("ja-JP")}`;
@@ -364,12 +365,28 @@ function renderCheckout() {
   const subtotal = cartSubtotal();
   const shipping = subtotal >= 11000 ? 0 : 660;
   if (!entries.length) { go("cart"); return; }
-  app.innerHTML = `${breadcrumb("購入確認", "ショッピングカート")}<div class="page-heading"><div><span class="eyebrow">CHECKOUT</span><h1>ご注文内容の確認</h1><p>お届け先とお支払い方法をご確認ください。</p></div></div>${renderStep(1)}<div class="checkout-grid"><div><section class="panel checkout-panel"><h2 class="panel-title"><span><span class="panel-title__number">1</span>お届け先</span><button class="text-link" data-go="profile">変更する</button></h2><div class="address-choice"><input type="radio" checked aria-label="この住所へ配送" /><div><strong>${safeText(currentUser?.name || "テストユーザー")}</strong>${safeText(currentUser?.address || "〒810-0001 福岡県福岡市中央区天神1-2-3")}</div></div></section><section class="panel checkout-panel"><h2 class="panel-title"><span><span class="panel-title__number">2</span>お支払い方法</span></h2><label class="payment-choice"><input type="radio" name="payment" checked />クレジットカード（デモ）</label><label class="payment-choice"><input type="radio" name="payment" />代金引換（デモ）</label><label class="payment-choice"><input type="radio" name="payment" />銀行振込（デモ）</label></section><section class="panel checkout-panel"><h2 class="panel-title"><span><span class="panel-title__number">3</span>注文商品（${cartQuantity()}点）</span></h2>${entries.map(({ product, quantity }) => `<div class="order-preview-item"><span>${product.name} × ${quantity}</span><strong>${yen(product.price * quantity)}</strong></div>`).join("")}</section></div><aside class="panel order-summary"><h2>ご注文金額</h2><div class="summary-line"><span>商品小計</span><strong>${yen(subtotal)}</strong></div><div class="summary-line"><span>送料</span><strong>${shipping ? yen(shipping) : "無料"}</strong></div><div class="summary-total"><span>合計（税込）</span><strong>${yen(subtotal + shipping)}</strong></div><button class="button button--wide" data-action="place-order">注文を確定する</button><p class="summary-note">デモ操作です。決済は実行されません。</p></aside></div>`;
+  const paymentChoices = [
+    ["card", "▰", "クレジット / デビットカード", "Visa・Mastercard・JCB（デモ）"],
+    ["paypay", "P", "PayPay", "QR・電子マネー（デモ）"],
+    ["rakutenpay", "R", "楽天ペイ", "QR・オンライン決済（デモ）"],
+    ["transport", "Suica", "交通系電子マネー", "Suica・PASMO（デモ）"],
+    ["konbini", "▦", "コンビニ払い", "注文後に払込番号を表示（デモ）"],
+  ];
+  const paymentDetails = selectedPayment === "card"
+    ? `<div class="payment-detail"><p class="demo-payment-warning"><strong>決済デモです。</strong>実際のカード情報は入力しないでください。下記のテスト値だけ利用でき、入力値は保存・送信されません。</p><div class="form-grid checkout-payment-form"><label class="form-field form-field--full"><span>テスト用カード番号</span><input class="input" id="demo-card-number" inputmode="numeric" autocomplete="off" maxlength="19" placeholder="4242 4242 4242 4242" aria-describedby="demo-card-hint" /><small class="form-hint" id="demo-card-hint">デモ値：4242 4242 4242 4242</small></label><label class="form-field"><span>有効期限</span><input class="input" id="demo-card-expiry" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="12/30" /></label><label class="form-field"><span>セキュリティコード</span><input class="input" id="demo-card-cvc" inputmode="numeric" autocomplete="off" maxlength="3" placeholder="123" /></label><p class="form-hint form-field--full">有効期限は 12/30、コードは 123 を入力してください。</p></div></div>`
+    : selectedPayment === "konbini"
+      ? `<div class="payment-detail"><label class="form-field"><span>お支払い先のコンビニ</span><select class="select" id="konbini-store"><option>セブン‐イレブン</option><option>ファミリーマート</option><option>ローソン</option><option>ミニストップ</option></select></label><p class="payment-detail-note">注文確定後、デモ用の払込番号と期限を表示します。店頭での支払いはできません。</p></div>`
+      : `<div class="payment-detail"><p class="payment-detail-note"><strong>${paymentChoices.find(([value]) => value === selectedPayment)?.[2] || "電子マネー"}のデモ決済</strong><br />外部アプリやアカウントには接続せず、この画面上で決済完了をシミュレーションします。</p></div>`;
+  app.innerHTML = `${breadcrumb("購入確認", "ショッピングカート")}<div class="page-heading"><div><span class="eyebrow">CHECKOUT · PAYMENT DEMO</span><h1>ご注文内容の確認</h1><p>お届け先とお支払い方法を選択してください。</p></div></div>${renderStep(1)}<div class="checkout-grid"><div><section class="panel checkout-panel"><h2 class="panel-title"><span><span class="panel-title__number">1</span>お届け先</span><button class="text-link" data-go="profile">変更する</button></h2><div class="address-choice"><input type="radio" checked aria-label="この住所へ配送" /><div><strong>${safeText(currentUser?.name || "テストユーザー")}</strong>${safeText(currentUser?.address || "〒810-0001 福岡県福岡市中央区天神1-2-3")}</div></div></section><section class="panel checkout-panel"><h2 class="panel-title"><span><span class="panel-title__number">2</span>お支払い方法</span><span class="badge badge--blue">すべてデモ</span></h2><div class="payment-method-grid">${paymentChoices.map(([value, icon, label, description]) => `<label class="payment-method ${selectedPayment === value ? "is-selected" : ""}"><input type="radio" name="payment" value="${value}" ${selectedPayment === value ? "checked" : ""} /><span class="payment-method__icon" aria-hidden="true">${icon}</span><span class="payment-method__copy"><strong>${label}</strong><small>${description}</small></span></label>`).join("")}</div>${paymentDetails}</section><section class="panel checkout-panel"><h2 class="panel-title"><span><span class="panel-title__number">3</span>注文商品（${cartQuantity()}点）</span></h2>${entries.map(({ product, quantity }) => `<div class="order-preview-item"><span>${safeText(product.name)} × ${quantity}</span><strong>${yen(product.price * quantity)}</strong></div>`).join("")}</section></div><aside class="panel order-summary"><h2>ご注文金額</h2><div class="summary-line"><span>商品小計</span><strong>${yen(subtotal)}</strong></div><div class="summary-line"><span>送料</span><strong>${shipping ? yen(shipping) : "無料"}</strong></div><div class="summary-total"><span>合計（税込）</span><strong>${yen(subtotal + shipping)}</strong></div><button class="button button--wide" data-action="place-order">デモ注文を確定する</button><p class="summary-note">実際の決済・請求・店舗での支払いは発生しません。</p></aside></div>`;
 }
 
 function renderSuccess() {
   if (!lastOrder) { go("home"); return; }
-  app.innerHTML = `${breadcrumb("ご注文完了", "")}<div style="padding:28px 0">${renderStep(2)}<section class="panel success-card"><div class="success-mark">✓</div><span class="eyebrow">ORDER COMPLETED</span><h1>ご注文ありがとうございます！</h1><p>ご注文が完了しました。これは画面確認用のデモ注文です。</p><div class="order-number"><span>注文番号</span><strong>${lastOrder.number}</strong></div><div class="success-actions"><button class="button button--wide" data-go="orders">購入履歴を見る</button><button class="button button--outline button--wide" data-go="home">トップページへ戻る</button></div></section></div>`;
+  const isKonbini = lastOrder.paymentMethod === "konbini";
+  const paymentSummary = isKonbini
+    ? `<div class="payment-result"><div class="summary-line"><span>お支払い先</span><strong>${safeText(lastOrder.paymentStore)}</strong></div><div class="summary-line"><span>デモ払込番号</span><strong class="payment-code">${safeText(lastOrder.paymentCode)}</strong></div><p>お支払い期限（デモ）：${safeText(lastOrder.paymentDeadline)}<br />この番号は画面確認用です。実際のお支払いには使えません。</p></div>`
+    : `<div class="payment-result"><div class="summary-line"><span>お支払い方法</span><strong>${safeText(lastOrder.paymentLabel)}</strong></div><p>デモ決済が完了しました。請求や外部サービスとの通信はありません。</p></div>`;
+  app.innerHTML = `${breadcrumb("ご注文完了", "")}<div style="padding:28px 0">${renderStep(2)}<section class="panel success-card"><div class="success-mark">✓</div><span class="eyebrow">DEMO ORDER</span><h1>ご注文を受け付けました</h1><p>これは画面確認用のデモ注文です。実際の商品発送や決済は行われません。</p><div class="order-number"><span>注文番号</span><strong>${safeText(lastOrder.number)}</strong></div>${paymentSummary}<div class="success-actions"><button class="button button--wide" data-go="orders">購入履歴を見る</button><button class="button button--outline button--wide" data-go="home">トップページへ戻る</button></div></section></div>`;
 }
 
 function formField(label, name, placeholder = "", type = "text", value = "", hint = "") {
@@ -391,7 +408,8 @@ function getSampleOrders() {
 }
 
 function orderCard(order) {
-  return `<article class="order-card"><div class="order-card__top"><div><strong>${order.date}　注文番号：${order.number}</strong><small>ご注文内容を確認できます。</small></div><span class="badge ${order.status === "発送準備中" ? "badge--blue" : ""}">${order.status}</span></div><div class="order-card__products">${order.items.map((item) => { const product = findProduct(item.id); return product ? artFor(product.type, product.shortName) : ""; }).join("")}</div><div class="order-card__bottom"><span>合計金額 <strong>${yen(order.total)}</strong></span><button class="text-link" data-action="order-detail" data-id="${order.number}">詳細を見る →</button></div></article>`;
+  const statusClass = order.status === "コンビニ支払い待ち（デモ）" ? "badge--warning" : order.status === "発送準備中" || order.status === "決済完了（デモ）" ? "badge--blue" : "";
+  return `<article class="order-card"><div class="order-card__top"><div><strong>${safeText(order.date)}　注文番号：${safeText(order.number)}</strong><small>${order.paymentLabel ? `お支払い：${safeText(order.paymentLabel)}` : "ご注文内容を確認できます。"}</small></div><span class="badge ${statusClass}">${safeText(order.status)}</span></div><div class="order-card__products">${order.items.map((item) => { const product = findProduct(item.id); return product ? artFor(product.type, product.shortName) : ""; }).join("")}</div><div class="order-card__bottom"><span>合計金額 <strong>${yen(order.total)}</strong></span><button class="text-link" data-action="order-detail" data-id="${safeText(order.number)}">詳細を見る →</button></div></article>`;
 }
 
 function accountSidebar(active = "account") {
@@ -734,13 +752,38 @@ document.addEventListener("click", (event) => {
   if (kind === "remove-cart") { delete cart[id]; persistCart(); renderCart(); showToast("カートから商品を削除しました"); }
   if (kind === "checkout") { if (!currentUser) go("auth"); else go("checkout"); }
   if (kind === "place-order") {
+    const paymentMethod = document.querySelector('input[name="payment"]:checked')?.value || "card";
+    const paymentLabels = { card: "クレジット / デビットカード（デモ）", paypay: "PayPay（デモ）", rakutenpay: "楽天ペイ（デモ）", transport: "交通系電子マネー（デモ）", konbini: "コンビニ払い（デモ）" };
+    if (paymentMethod === "card") {
+      const number = (document.querySelector("#demo-card-number")?.value || "").replace(/\D/g, "");
+      const expiry = document.querySelector("#demo-card-expiry")?.value.trim();
+      const cvc = document.querySelector("#demo-card-cvc")?.value.trim();
+      if (number !== "4242424242424242" || expiry !== "12/30" || cvc !== "123") {
+        showToast("カード決済デモには表示されたテスト値だけを入力してください");
+        document.querySelector("#demo-card-number")?.focus();
+        return;
+      }
+    }
     const subtotal = cartSubtotal(); const shipping = subtotal >= 11000 ? 0 : 660;
-    lastOrder = { number: `PC${new Date().toISOString().slice(0, 10).replaceAll("-", "")}${String(Date.now()).slice(-5)}`, total: subtotal + shipping, date: new Date().toLocaleDateString("ja-JP"), status: "発送準備中", items: cartEntries().map(({ product, quantity }) => ({ id: product.id, quantity })) };
+    const paymentStore = paymentMethod === "konbini" ? (document.querySelector("#konbini-store")?.value || "セブン‐イレブン") : "";
+    const paymentDeadline = new Date(); paymentDeadline.setDate(paymentDeadline.getDate() + 3);
+    lastOrder = {
+      number: `PC${new Date().toISOString().slice(0, 10).replaceAll("-", "")}${String(Date.now()).slice(-5)}`,
+      total: subtotal + shipping,
+      date: new Date().toLocaleDateString("ja-JP"),
+      status: paymentMethod === "konbini" ? "コンビニ支払い待ち（デモ）" : "決済完了（デモ）",
+      paymentMethod,
+      paymentLabel: paymentLabels[paymentMethod] || "デモ決済",
+      paymentStore,
+      paymentCode: paymentMethod === "konbini" ? String(Math.floor(100000 + Math.random() * 900000)) : "",
+      paymentDeadline: paymentMethod === "konbini" ? paymentDeadline.toLocaleDateString("ja-JP") : "",
+      items: cartEntries().map(({ product, quantity }) => ({ id: product.id, quantity })),
+    };
     orders = [lastOrder, ...orders]; storage.set("pcparts-orders", orders); cart = {}; persistCart(); go("success");
   }
   if (kind === "clear-filter") { catalogFilter = { category: "すべて", query: "", min: "", max: "", sort: "おすすめ順" }; renderHome(); }
   if (kind === "account-menu") { if (id === "logout") { currentUser = null; storage.set("pcparts-user", currentUser); showToast("ログアウトしました"); go("home"); } else go(id); }
-  if (kind === "order-detail") { const order = getSampleOrders().find((item) => item.number === id); if (order) openModal("注文内容", `${order.date}のご注文（${order.number}）<hr />${order.items.map((item) => { const product = findProduct(item.id); return product ? `<div class="summary-line"><span>${product.name} × ${item.quantity}</span><strong>${yen(product.price * item.quantity)}</strong></div>` : ""; }).join("")}<div class="summary-total"><span>合計</span><strong>${yen(order.total)}</strong></div>`); }
+  if (kind === "order-detail") { const order = getSampleOrders().find((item) => item.number === id); if (order) openModal("注文内容", `${safeText(order.date)}のご注文（${safeText(order.number)}）<hr />${order.items.map((item) => { const product = findProduct(item.id); return product ? `<div class="summary-line"><span>${safeText(product.name)} × ${item.quantity}</span><strong>${yen(product.price * item.quantity)}</strong></div>` : ""; }).join("")}<div class="summary-total"><span>合計</span><strong>${yen(order.total)}</strong></div>${order.paymentLabel ? `<div class="summary-line"><span>支払い方法</span><strong>${safeText(order.paymentLabel)}</strong></div>` : ""}${order.paymentStore ? `<div class="summary-line"><span>お支払い先</span><strong>${safeText(order.paymentStore)}</strong></div>` : ""}${order.paymentCode ? `<div class="summary-line"><span>デモ払込番号</span><strong>${safeText(order.paymentCode)}</strong></div>` : ""}${order.paymentDeadline ? `<div class="summary-line"><span>期限（デモ）</span><strong>${safeText(order.paymentDeadline)}</strong></div>` : ""}`); }
   if (kind === "wizard-back") { wizardStep = Math.max(0, wizardStep - 1); renderWizard(); }
   if (kind === "restart-wizard") { serverAiProposal = null; wizardStep = 0; wizardAnswers = { budget: "", use: "", games: "", style: "", equipment: "", conditions: "" }; go("ai"); }
   if (kind === "add-build") { action.dataset.ids.split(",").forEach((productId) => { if (findProduct(productId)) cart[productId] = (Number(cart[productId]) || 0) + 1; }); persistCart(); showToast("おすすめ構成をカートに追加しました"); go("cart"); }
@@ -818,6 +861,10 @@ document.addEventListener("change", (event) => {
   if (event.target.matches(".choice-card input")) {
     event.target.closest(".choice-grid").querySelectorAll(".choice-card").forEach((card) => card.classList.remove("is-selected"));
     event.target.closest(".choice-card").classList.add("is-selected");
+  }
+  if (event.target.matches('input[name="payment"]')) {
+    selectedPayment = event.target.value;
+    renderCheckout();
   }
 });
 
