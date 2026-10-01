@@ -1,0 +1,145 @@
+<?php
+declare(strict_types=1);
+
+function env_value(string $name, ?string $fallback = null): ?string
+{
+    $value = getenv($name);
+    return $value === false || $value === '' ? $fallback : $value;
+}
+
+function cors_headers(): void
+{
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    $allowed = array_values(array_filter(array_map('trim', explode(',', env_value('APP_ALLOWED_ORIGINS', 'http://localhost:8080,http://127.0.0.1:8080') ?? ''))));
+    if ($origin !== '' && !in_array('*', $allowed, true) && !in_array($origin, $allowed, true)) {
+        json_response(['error' => 'この接続元からのリクエストは許可されていません。'], 403);
+    }
+    if ($origin !== '') {
+        header('Access-Control-Allow-Origin: ' . $origin);
+        header('Access-Control-Allow-Credentials: true');
+        header('Vary: Origin');
+    }
+    header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Content-Type: application/json; charset=utf-8');
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+        http_response_code(204);
+        exit;
+    }
+}
+
+function json_response(array $payload, int $status = 200): never
+{
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
+}
+
+function json_body(): array
+{
+    $body = json_decode(file_get_contents('php://input') ?: '', true);
+    if (!is_array($body)) {
+        json_response(['error' => 'JSON形式のリクエストを送ってください。'], 400);
+    }
+    return $body;
+}
+
+function db(): PDO
+{
+    static $connection = null;
+    if ($connection instanceof PDO) return $connection;
+    $host = env_value('DB_HOST', '127.0.0.1');
+    $port = env_value('DB_PORT', '3306');
+    $name = env_value('DB_NAME', 'pc_parts_shop');
+    $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
+    try {
+        $connection = new PDO($dsn, env_value('DB_USER', 'pcparts'), env_value('DB_PASSWORD', ''), [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    } catch (Throwable $error) {
+        error_log('Database connection failed: ' . $error->getMessage());
+        json_response(['error' => 'データベースに接続できません。設定を確認してください。'], 503);
+    }
+    return $connection;
+}
+
+function start_app_session(): void
+{
+    if (session_status() === PHP_SESSION_ACTIVE) return;
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (int)($_SERVER['SERVER_PORT'] ?? 0) === 443 || filter_var(env_value('SESSION_SECURE', 'false'), FILTER_VALIDATE_BOOLEAN);
+    session_name('pcparts_admin');
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => $https,
+        'httponly' => true,
+        'samesite' => env_value('SESSION_SAMESITE', 'Lax'),
+    ]);
+    session_start();
+}
+
+function require_admin(): void
+{
+    start_app_session();
+    if (($_SESSION['role'] ?? null) !== 'admin') {
+        json_response(['error' => '管理者としてログインしてください。'], 401);
+    }
+}
+
+function product_payload(array $row): array
+{
+    $specs = $row['specs'] ?? null;
+    if (is_string($specs)) $specs = json_decode($specs, true);
+    return [
+        'id' => (string)$row['catalog_key'],
+        'name' => (string)$row['name'],
+        'shortName' => (string)($row['short_name'] ?: $row['name']),
+        'maker' => (string)$row['maker'],
+        'category' => (string)$row['category'],
+        'type' => (string)$row['product_type'],
+        'price' => (int)$row['price'],
+        'stock' => (int)$row['stock'],
+        'rating' => 0,
+        'reviews' => 0,
+        'description' => (string)($row['description'] ?? ''),
+        'specs' => is_array($specs) ? $specs : new stdClass(),
+        'manufacturerUrl' => $row['manufacturer_url'] ?? '',
+        'isDemoPrice' => (bool)$row['is_demo_price'],
+    ];
+}
+
+function clean_product(array $input): array
+{
+    $name = trim((string)($input['name'] ?? ''));
+    $category = trim((string)($input['category'] ?? ''));
+    $price = filter_var($input['price'] ?? null, FILTER_VALIDATE_INT);
+    $stock = filter_var($input['stock'] ?? null, FILTER_VALIDATE_INT);
+    if ($name === '' || mb_strlen($name) > 255 || $category === '' || mb_strlen($category) > 80 || $price === false || $price < 0 || $price > 4294967295 || $stock === false || $stock < 0 || $stock > 4294967295) {
+        json_response(['error' => '商品名・カテゴリ・価格・在庫の内容を確認してください。'], 422);
+    }
+    $specs = $input['specs'] ?? new stdClass();
+    if (!is_array($specs) && !is_object($specs)) json_response(['error' => '仕様は項目と値のオブジェクトで指定してください。'], 422);
+    if (strlen(json_encode($specs, JSON_UNESCAPED_UNICODE) ?: '') > 12000) json_response(['error' => '仕様が長すぎます。'], 422);
+    $url = trim((string)($input['manufacturerUrl'] ?? ''));
+    if ($url !== '' && (!filter_var($url, FILTER_VALIDATE_URL) || !in_array(strtolower((string)parse_url($url, PHP_URL_SCHEME)), ['https', 'http'], true))) {
+        json_response(['error' => 'メーカー情報URLはhttpまたはhttpsで入力してください。'], 422);
+    }
+    return [
+        'name' => $name,
+        'short_name' => mb_substr(trim((string)($input['shortName'] ?? '')) ?: $name, 0, 120),
+        'maker' => mb_substr(trim((string)($input['maker'] ?? '')), 0, 100),
+        'category' => $category,
+        'product_type' => preg_match('/^[a-z0-9_-]{1,24}$/', (string)($input['type'] ?? 'other')) ? $input['type'] : 'other',
+        'price' => $price,
+        'stock' => $stock,
+        'description' => mb_substr(trim((string)($input['description'] ?? '')), 0, 2000),
+        'specs' => json_encode($specs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        'manufacturer_url' => $url === '' ? null : $url,
+        'is_demo_price' => !empty($input['isDemoPrice']) ? 1 : 0,
+    ];
+}
+
+cors_headers();

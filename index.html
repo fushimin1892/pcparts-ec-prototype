@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07172c" />
+    <meta name="description" content="PCパーツを選んで組み立てる、チーム開発用ECサイトの画面試作です。" />
+    <title>PC PARTS SHOP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="announcement"><span class="announcement__spark">✦</span> 11,000円以上のお買い上げで送料無料 <span class="announcement__divider">/</span> 新生活セットアップ特集</div>
+    <header class="site-header">
+      <div class="header-main shell">
+        <a class="brand" href="#/home" aria-label="PC Parts Shop ホーム">
+          <span class="brand__mark" aria-hidden="true"><svg viewBox="0 0 42 42"><path d="M21 2 39 12v18L21 40 3 30V12L21 2Z"/><path d="M3 12 21 22l18-10M21 22v18"/></svg></span>
+          <span class="brand__wordmark">PC PARTS <span>SHOP</span><small>BUILD YOUR NEXT PC</small></span>
+        </a>
+        <form class="searchbar" id="header-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg>
+          <input id="header-query" type="search" placeholder="パーツ名・メーカー・型番から探す" aria-label="商品を検索" />
+          <button type="submit">検索</button>
+        </form>
+        <div class="header-actions">
+          <button class="icon-action" data-go="favorites" aria-label="お気に入り"><span class="icon-action__symbol">♡</span><span class="icon-action__label">お気に入り</span></button>
+          <button class="icon-action icon-action--cart" data-go="cart" aria-label="カート"><span class="icon-action__symbol">▱</span><span class="cart-badge" id="cart-count">0</span><span class="icon-action__label">カート</span></button>
+          <button class="icon-action" data-go="account" aria-label="マイページ"><span class="icon-action__symbol">♙</span><span class="icon-action__label">マイページ</span></button>
+        </div>
+        <button class="mobile-menu-button" id="mobile-menu-button" type="button" aria-label="メニューを開く" aria-expanded="false" aria-controls="drawer-root">☰</button>
+      </div>
+      <nav class="category-nav shell" aria-label="商品カテゴリ">
+        <button data-category="すべて">すべての商品</button>
+        <button data-category="グラフィックボード">グラフィックボード</button>
+        <button data-category="CPU">CPU</button>
+        <button data-category="メモリ">メモリ</button>
+        <button data-category="ストレージ">ストレージ</button>
+        <button data-category="マザーボード">マザーボード</button>
+        <button data-category="PCケース">PCケース</button>
+        <button data-category="電源">電源</button>
+        <button data-category="モニター">モニター</button>
+        <button data-category="冷却パーツ">冷却パーツ</button>
+      </nav>
+    </header>
+
+    <main id="app" class="shell" tabindex="-1"></main>
+
+    <footer class="site-footer">
+      <div class="shell footer-grid">
+        <div><a class="brand brand--footer" href="#/home"><span class="brand__mark"><svg viewBox="0 0 42 42"><path d="M21 2 39 12v18L21 40 3 30V12L21 2Z"/><path d="M3 12 21 22l18-10M21 22v18"/></svg></span><span class="brand__wordmark">PC PARTS <span>SHOP</span><small>BUILD YOUR NEXT PC</small></span></a><p>パーツ選びから、理想の一台へ。</p></div>
+        <div><strong>ショップ</strong><a href="#/home">商品一覧</a><a href="#/favorites">お気に入り</a><a href="#/cart">ショッピングカート</a></div>
+        <div><strong>マイページ</strong><a href="#/account">アカウント</a><a href="#/orders">購入履歴</a><a href="#/admin-login">管理者ログイン</a></div>
+        <div class="footer-note">このサイトは画面モックを参考にしたチーム開発用のフロント試作です。<br />ご注文・お支払いは実行されません。</div>
+      </div>
+      <div class="footer-bottom">© 2026 PC PARTS SHOP <span>DESIGN YOUR PERFORMANCE.</span></div>
+    </footer>
+
+    <button class="support-button" id="support-button" aria-label="サポートを開く"><span>✳</span><small>サポート</small></button>
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+    <div id="drawer-root"></div>
+    <div id="modal-root"></div>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

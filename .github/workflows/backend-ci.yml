@@ -1,0 +1,67 @@
+name: PHP and MySQL API
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  api-smoke-check:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-password
+          MYSQL_DATABASE: pc_parts_shop
+          MYSQL_USER: pcparts
+          MYSQL_PASSWORD: ci-db-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root-password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: pc_parts_shop
+      DB_USER: pcparts
+      DB_PASSWORD: ci-db-password
+      APP_ALLOWED_ORIGINS: http://127.0.0.1:8080
+      SESSION_SAMESITE: Lax
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, mbstring, pdo_mysql
+      - name: Lint PHP files
+        run: find backend -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Create schema and seed catalog
+        run: |
+          mysql --host=127.0.0.1 --port=3306 --user=root --password=ci-root-password < database/schema.sql
+          php backend/scripts/seed_catalog.php
+      - name: Start PHP server and verify API
+        env:
+          ADMIN_PASSWORD: ci-only-test-password-012345
+        run: |
+          php -S 127.0.0.1:8080 -t backend/public > /tmp/pcparts-php.log 2>&1 &
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8080/api/health.php > /tmp/health.json; then break; fi
+            sleep 1
+          done
+          php -r '$h=json_decode(file_get_contents("/tmp/health.json"), true); if (($h["database"] ?? "") !== "connected") exit(1);'
+          curl -sS -o /tmp/unauthorized.json -w '%{http_code}' -X POST http://127.0.0.1:8080/api/products.php -H 'Content-Type: application/json' -d '{}' | grep -qx 401
+          php -r '$r=json_decode(file_get_contents("http://127.0.0.1:8080/api/products.php"), true); $n=count(array_filter($r["items"] ?? [], fn($p) => $p["category"] === "CPU")); if ($n < 28) { fwrite(STDERR, "Expected 28 seeded CPUs; found $n\n"); exit(1); } echo "Public catalog CPUs: $n\n";'
+          php backend/scripts/create_admin.php ci@example.test 'CI Admin'
+          curl -fsS -c /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"email":"ci@example.test","password":"ci-only-test-password-012345"}' http://127.0.0.1:8080/api/admin/login.php | grep -q '"ok":true'
+          curl -fsS -b /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"id":"ci-smoke-product","name":"CI smoke product","shortName":"CI smoke","maker":"CI","category":"CPU","type":"cpu","price":1,"stock":1,"description":"CI only","specs":{},"isDemoPrice":true}' http://127.0.0.1:8080/api/products.php | grep -q 'ci-smoke-product'
+          curl -fsS -b /tmp/pcparts-cookie.txt -X DELETE 'http://127.0.0.1:8080/api/products.php?id=ci-smoke-product' | grep -q '"deleted":true'
