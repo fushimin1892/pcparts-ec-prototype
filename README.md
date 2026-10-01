@@ -27,7 +27,7 @@ node backend/scripts/import_marketplace_catalog.mjs --target=1000 --output=marke
 
 商品説明、価格、在庫はAPIを取得した時点の情報です。取り込んだ商品は「参考価格」かつ在庫0で登録するため、管理者が説明・価格・自社在庫を確認して在庫数を設定するまではカートに入れられません。PC工房、ツクモ、Arkなどのショップ名はAPI応答に含まれる場合そのまま保存し、販売元リンクから個別の商品ページを確認できます。直接APIが提供されない店舗ページを大量巡回して価格や画像を集める処理はしません。
 
-Amazon商品は任意でAmazon.co.jp Creators APIから検索できます。Amazonアソシエイト登録、API利用承認、クライアントID / シークレット / Partner Tagが必要です。公式案内では利用開始にアソシエイト登録とAPI認証情報を求め、PA API経由のアクセスには直近30日間の適格販売実績条件が示されており、検索APIは1回最大10件です。ローカル実行環境に次を設定すると、他社APIとあわせて検索します。API資格がない場合はAmazonを省略します。
+Amazon商品は任意でAmazon.co.jp Creators APIから検索できます。Amazonアソシエイト登録後にCreators APIを登録し、クライアントID / シークレット / Partner Tagを設定してください。SearchItems APIは1回最大10件を返します。API資格がない場合はAmazonを省略します。
 
 ```powershell
 $env:AMAZON_CREATORS_CLIENT_ID = "発行されたClient ID"
