@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../../../src/bootstrap.php';
+require_once __DIR__ . '/../../../../src/bootstrap.php';
 require_admin();
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
