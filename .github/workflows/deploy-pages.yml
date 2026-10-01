@@ -15,13 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Check JavaScript syntax
         run: node --check app.js
       - name: Build static site
         run: |
           mkdir -p dist
           cp index.html styles.css app.js config.js dist/
+          sed -i "s#href=\"styles.css\"#href=\"styles.css?v=${GITHUB_SHA}\"#; s#src=\"config.js\"#src=\"config.js?v=${GITHUB_SHA}\"#; s#src=\"app.js\"#src=\"app.js?v=${GITHUB_SHA}\"#" dist/index.html
           touch dist/.nojekyll
       - name: Set up Pages
         uses: actions/configure-pages@v5
