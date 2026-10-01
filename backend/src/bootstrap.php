@@ -1,17 +1,15 @@
 <?php
 declare(strict_types=1);
 
-function env_value(string $name, ?string $fallback = null): ?string
-{
-    $value = getenv($name);
-    return $value === false || $value === '' ? $fallback : $value;
-}
+require_once __DIR__ . '/env.php';
 
 function cors_headers(): void
 {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     $allowed = array_values(array_filter(array_map('trim', explode(',', env_value('APP_ALLOWED_ORIGINS', 'http://localhost:8080,http://127.0.0.1:8080') ?? ''))));
-    if ($origin !== '' && !in_array('*', $allowed, true) && !in_array($origin, $allowed, true)) {
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (int)($_SERVER['SERVER_PORT'] ?? 0) === 443;
+    $sameOrigin = ($_SERVER['HTTP_HOST'] ?? '') !== '' && $origin === ($isHttps ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'];
+    if ($origin !== '' && !$sameOrigin && !in_array('*', $allowed, true) && !in_array($origin, $allowed, true)) {
         json_response(['error' => 'この接続元からのリクエストは許可されていません。'], 403);
     }
     if ($origin !== '') {

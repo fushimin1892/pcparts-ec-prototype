@@ -1,8 +1,9 @@
 <?php
+require_once __DIR__ . '/env.php';
 return [
-    'host' => getenv('DB_HOST') ?: '127.0.0.1',
-    'port' => getenv('DB_PORT') ?: '3306',
-    'name' => getenv('DB_NAME') ?: 'pc_parts_shop',
-    'user' => getenv('DB_USER') ?: 'pcparts',
-    'password' => getenv('DB_PASSWORD') ?: '',
+    'host' => env_value('DB_HOST', '127.0.0.1'),
+    'port' => env_value('DB_PORT', '3306'),
+    'name' => env_value('DB_NAME', 'pc_parts_shop'),
+    'user' => env_value('DB_USER', 'pcparts'),
+    'password' => env_value('DB_PASSWORD', ''),
 ];

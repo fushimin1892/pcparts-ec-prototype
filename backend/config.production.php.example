@@ -1,0 +1,15 @@
+<?php
+// Copy to _private/config.local.php in the generated Lolipop release package.
+// Obtain DB_* values from the Lolipop control panel. Never commit real credentials.
+return [
+    'DB_HOST' => 'mysql000.phy.lolipop.lan',
+    'DB_PORT' => '3306',
+    'DB_NAME' => 'your_lolipop_database',
+    'DB_USER' => 'your_lolipop_database_user',
+    'DB_PASSWORD' => 'replace-with-a-long-random-password',
+    'SESSION_SECURE' => 'true',
+    'GEMINI_API_KEY' => '',
+    'GEMINI_MODEL' => 'gemini-2.5-flash',
+    'RAKUTEN_APP_ID' => '',
+    'RAKUTEN_ACCESS_KEY' => '',
+];

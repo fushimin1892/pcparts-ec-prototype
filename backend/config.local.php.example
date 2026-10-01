@@ -1,0 +1,16 @@
+<?php
+// Copy this file to config.local.php and fill in the values for your environment.
+// Never commit config.local.php; it contains passwords and API keys.
+return [
+    'DB_HOST' => '127.0.0.1',
+    'DB_PORT' => '3306',
+    'DB_NAME' => 'pc_parts_shop',
+    'DB_USER' => 'root',
+    'DB_PASSWORD' => '', // XAMPP default is empty; set a password if you changed it.
+    'APP_ALLOWED_ORIGINS' => 'http://localhost,http://127.0.0.1',
+    'SESSION_SECURE' => 'false',
+    'GEMINI_API_KEY' => '',
+    'GEMINI_MODEL' => 'gemini-2.5-flash',
+    'RAKUTEN_APP_ID' => '',
+    'RAKUTEN_ACCESS_KEY' => '',
+];

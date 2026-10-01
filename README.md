@@ -39,7 +39,37 @@ Amazon公式の[Creators API利用条件](https://affiliate-program.amazon.com/c
 
 ## PHP / MySQLを起動
 
-Docker DesktopとDocker Composeを使う開発用構成です。
+### XAMPPでローカル開発
+
+XAMPP Control PanelでApacheとMySQLを起動し、Node.jsが使える状態でプロジェクトのルートから公開用パッケージを作ります。
+
+```powershell
+node backend/scripts/build_lolipop_release.mjs
+```
+
+`backend/config.local.php`はXAMPPのMySQL設定に合わせます（初期状態のユーザーは`root`、パスワードは空欄です）。生成された`backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーしてXAMPP用DB設定を入れ、同フォルダに置きます。生成パッケージの中身を`C:\xampp\htdocs\pcparts`へコピーし、phpMyAdminで`pc_parts_shop`データベースを作成してから`database/schema.sql`をインポートします。管理者PowerShellで以下を実行します。
+
+```powershell
+C:\xampp\php\php.exe C:\xampp\htdocs\pcparts\_private\scripts\seed_catalog.php
+$env:ADMIN_PASSWORD = "12文字以上のローカル管理者パスワード"
+C:\xampp\php\php.exe C:\xampp\htdocs\pcparts\_private\scripts\create_admin.php admin@example.com "ショップ管理者"
+```
+
+ブラウザで`http://localhost/pcparts/`を開きます。`backend/config.local.php`や`backend/dist-lolipop/_private/config.local.php`に設定したキーとパスワードはGitへ登録しないでください。XAMPPは開発用で、インターネットへ公開する本番サーバーには使いません。
+
+### ロリポップへ本番配置
+
+ロリポップでPHPとMySQLが使えるプラン・ドメインを用意し、ユーザー専用ページに表示されるDB接続情報を使います。MySQLはライトプラン以上で利用でき、SSHはスタンダードプラン以上で利用できます。PHP 8.3〜8.5、MySQL 8.4の対応状況は[公式サーバー仕様](https://lolipop.jp/service/server-spec/)に掲載されています。
+
+1. `node backend/scripts/build_lolipop_release.mjs`を実行します。ロリポップのユーザー専用ページでMySQLデータベースを作成します。
+2. `backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーし、ロリポップのDBホスト名・DB名・ユーザー名・パスワードを記入します。HTTPS公開なので`SESSION_SECURE`は`true`のままにします。必要ならGemini / 楽天のAPIキーもここへ入れます。
+3. `backend/dist-lolipop`の中身を、FTPSで対象ドメインの公開ディレクトリへアップロードします。ロリポップ公式マニュアルはFTPSとFTPアップロードを案内しています。[FTPS設定](https://lolipop.jp/manual/hp/ftp-set/)、[アップロード方法](https://lolipop.jp/manual/user/ftp2-04/)。`_private/.htaccess`も必ず一緒にアップロードしてください。
+4. phpMyAdminで作成したDBを選択し、`database/schema.sql`をインポートします。SSHが使えるプランなら`_private/scripts/seed_catalog.php`で初期カタログを入れ、`ADMIN_PASSWORD`を設定して`_private/scripts/create_admin.php`を実行します。SSHがないプランではXAMPPのPHPで`backend/scripts/generate_admin_sql.php`から管理者登録SQLを生成して、phpMyAdminで実行できます。
+5. `https://あなたのドメイン/api/health.php`が`database: connected`を返すことを確認し、管理者画面へログインします。
+
+DB接続情報やAPIキーは`_private/config.local.php`だけに置きます。公開画面の`config.js`へ書かないでください。ロリポップはPHP、MySQL、phpMyAdmin、FTPSを提供していますが、実際の公開には契約・ドメイン・アップロード権限とDB接続情報が必要です。この作業環境からはまだ確認できていません。ユーザー専用ページのFTP / DB情報はチャットへ貼らず、生成した`backend/dist-lolipop/_private/config.local.php`へ設定してください。
+
+### Dockerで開発（任意）
 
 ```sh
 Copy-Item backend/.env.example backend/.env
@@ -69,17 +99,11 @@ docker compose -f backend/docker-compose.yml exec -e DB_HOST=db -e ADMIN_PASSWOR
 - 楽天アプリIDを`RAKUTEN_APP_ID`に設定します。使う契約でアクセスキーが必要な場合は`RAKUTEN_ACCESS_KEY`もサーバーへ設定します。
 - APIキーを`config.js`やブラウザ側のJavaScriptへ入れないでください。
 
-`config.js`の`PC_PARTS_API_BASE_URL`はGitHub Pagesでは空欄のままです。PHPサーバーへ接続するときは、例のようにAPIのベースURLを設定してフロントを再デプロイします。
-
-```js
-window.PC_PARTS_API_BASE_URL = "https://api.example.com/api";
-```
-
-別ドメインのPHPサーバーを使う場合、`APP_ALLOWED_ORIGINS`にはパスを含まないOrigin（例：`https://fushimin1892.github.io`）を完全一致で追加し、HTTPS、`SESSION_SAMESITE=None`、`SESSION_SECURE=true`を設定してください。ブラウザのサードパーティCookie制限があるため、本番ではフロントとAPIを同じサイト（同一ドメイン配下）に置く構成を推奨します。
+GitHub Pages用`config.js`の`PC_PARTS_API_BASE_URL`は空欄のままです。PHPサーバーに配置するページは同一ドメインの`/api`を参照するため、別ドメインのCORS設定は不要です。
 
 ## GitHub Pagesと本番サーバー
 
-`.github/workflows/deploy-pages.yml`は`main`へのpushで静的フロントをGitHub Pagesへ公開します。Pagesは静的ファイルの配信先で、PHPプロセスやMySQLは実行しません。PHP版はDocker対応またはPHPとMySQLに対応したホスティング先へ配置してください。ホスティング先が決まったらAPI URLと環境変数を設定します。
+`.github/workflows/deploy-pages.yml`は`main`へのpushで静的フロントをGitHub Pagesへ公開します。Pagesは静的ファイルの配信先で、PHPプロセスやMySQLは実行しません。Lolipop用パッケージは`node backend/scripts/build_lolipop_release.mjs`で作成します。XAMPPもローカル開発にのみ使います。[XAMPP公式FAQ](https://www.apachefriends.org/faq_windows)も、本番用ではなく開発環境用と説明しています。
 
 今の注文確定はデモ処理です。注文・在庫引当・決済を本番利用する前に、PHP側の注文APIと決済サービスを実装し、DBトランザクションで在庫と金額を再確認してください。
 

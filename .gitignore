@@ -1,4 +1,6 @@
 backend/.env
+backend/config.local.php
+backend/dist-lolipop/
 marketplace-products.json
 backend/vendor/
 node_modules/
