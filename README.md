@@ -44,10 +44,10 @@ Amazon公式の[Creators API利用条件](https://affiliate-program.amazon.com/c
 XAMPP Control PanelでApacheとMySQLを起動し、Node.jsが使える状態でプロジェクトのルートから公開用パッケージを作ります。
 
 ```powershell
-node backend/scripts/build_lolipop_release.mjs
+node backend/scripts/build_lolipop_release.mjs --base-path=/pcparts
 ```
 
-`backend/config.local.php`はXAMPPのMySQL設定に合わせます（初期状態のユーザーは`root`、パスワードは空欄です）。生成された`backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーしてXAMPP用DB設定を入れ、同フォルダに置きます。生成パッケージの中身を`C:\xampp\htdocs\pcparts`へコピーし、phpMyAdminで`pc_parts_shop`データベースを作成してから`database/schema.sql`をインポートします。管理者PowerShellで以下を実行します。
+`backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーしてXAMPP用DB設定を入れ、同フォルダに置きます（初期状態のユーザーは`root`、パスワードは空欄です）。生成パッケージの中身を`C:\xampp\htdocs\pcparts`へコピーし、phpMyAdminで`pc_parts_shop`データベースを作成してから`database/schema.sql`をインポートします。管理者PowerShellで以下を実行します。
 
 ```powershell
 C:\xampp\php\php.exe C:\xampp\htdocs\pcparts\_private\scripts\seed_catalog.php
@@ -61,9 +61,9 @@ C:\xampp\php\php.exe C:\xampp\htdocs\pcparts\_private\scripts\create_admin.php a
 
 ロリポップでPHPとMySQLが使えるプラン・ドメインを用意し、ユーザー専用ページに表示されるDB接続情報を使います。MySQLはライトプラン以上で利用でき、SSHはスタンダードプラン以上で利用できます。PHP 8.3〜8.5、MySQL 8.4の対応状況は[公式サーバー仕様](https://lolipop.jp/service/server-spec/)に掲載されています。
 
-1. `node backend/scripts/build_lolipop_release.mjs`を実行します。ロリポップのユーザー専用ページでMySQLデータベースを作成します。
+1. ロリポップのユーザー専用ページでMySQLデータベースを作成します。既存のサイトを置き換えないよう、公開ディレクトリ内の`pcparts`サブフォルダへ配置する例では`node backend/scripts/build_lolipop_release.mjs --base-path=/pcparts`を実行します。ドメイン直下に配置する場合は`node backend/scripts/build_lolipop_release.mjs`を実行します。
 2. `backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーし、ロリポップのDBホスト名・DB名・ユーザー名・パスワードを記入します。HTTPS公開なので`SESSION_SECURE`は`true`のままにします。必要ならGemini / 楽天のAPIキーもここへ入れます。
-3. `backend/dist-lolipop`の中身を、FTPSで対象ドメインの公開ディレクトリへアップロードします。ロリポップ公式マニュアルはFTPSとFTPアップロードを案内しています。[FTPS設定](https://lolipop.jp/manual/hp/ftp-set/)、[アップロード方法](https://lolipop.jp/manual/user/ftp2-04/)。`_private/.htaccess`も必ず一緒にアップロードしてください。
+3. `backend/dist-lolipop`の中身を、FTPSで配置先へアップロードします。サブフォルダ配置なら公開ディレクトリ内に`pcparts`を作り、その中へ入れます。ロリポップ公式マニュアルはFTPSとFTPアップロードを案内しています。[FTPS設定](https://lolipop.jp/manual/hp/ftp-set/)、[アップロード方法](https://lolipop.jp/manual/user/ftp2-04/)。`_private/.htaccess`も必ず一緒にアップロードしてください。
 4. phpMyAdminで作成したDBを選択し、`database/schema.sql`をインポートします。SSHが使えるプランなら`_private/scripts/seed_catalog.php`で初期カタログを入れ、`ADMIN_PASSWORD`を設定して`_private/scripts/create_admin.php`を実行します。SSHがないプランではXAMPPのPHPで`backend/scripts/generate_admin_sql.php`から管理者登録SQLを生成して、phpMyAdminで実行できます。
 5. `https://あなたのドメイン/api/health.php`が`database: connected`を返すことを確認し、管理者画面へログインします。
 
