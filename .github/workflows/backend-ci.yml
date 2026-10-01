@@ -82,7 +82,9 @@ jobs:
           login_status=$(curl -sS -o /tmp/login.json -w '%{http_code}' -c /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"email":"ci@example.test","password":"ci-only-test-password-012345"}' http://127.0.0.1:8080/api/admin/login.php)
           if [ "$login_status" != 200 ]; then cat /tmp/login.json; cat /tmp/pcparts-php.log; exit 1; fi
           grep -q '"ok":true' /tmp/login.json
-          curl -fsS -b /tmp/pcparts-cookie.txt http://127.0.0.1:8080/api/admin/status.php | grep -q '"authenticated":true'
+          status_code=$(curl -sS -o /tmp/admin-status.json -w '%{http_code}' -b /tmp/pcparts-cookie.txt http://127.0.0.1:8080/api/admin/status.php)
+          if [ "$status_code" != 200 ]; then cat /tmp/admin-status.json; cat /tmp/pcparts-php.log; exit 1; fi
+          grep -q '"authenticated":true' /tmp/admin-status.json
           curl -fsS -b /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"items":[{"id":"ci-bulk-amd-cpu","name":"CI Bulk AMD CPU","maker":"AMD","platform":"AMD","category":"CPU","price":1,"stock":0,"imageUrl":"https://example.test/cpu.jpg","productUrl":"https://example.test/cpu","specs":{"ソケット":"AM5"},"isDemoPrice":true},{"id":"ci-bulk-gpu","name":"CI Bulk GPU","maker":"NVIDIA","category":"GPU","price":2,"stock":0,"imageUrl":"https://example.test/gpu.jpg","productUrl":"https://example.test/gpu","specs":{},"isDemoPrice":true}]}' http://127.0.0.1:8080/api/admin/products/bulk-import.php | grep -q '"imported":2'
           curl -fsS 'http://127.0.0.1:8080/api/products.php?keyword=CI%20Bulk' | grep -q '"imageUrl":"https://example.test/cpu.jpg"'
           curl -sS -o /tmp/missing-platform.json -w '%{http_code}' -b /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"id":"ci-missing-platform","name":"Missing platform","category":"CPU","price":1,"stock":1}' http://127.0.0.1:8080/api/products.php | grep -qx 422
