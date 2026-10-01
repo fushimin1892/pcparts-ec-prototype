@@ -108,6 +108,9 @@ function product_payload(array $row): array
         'description' => (string)($row['description'] ?? ''),
         'specs' => is_array($specs) ? $specs : new stdClass(),
         'manufacturerUrl' => $row['manufacturer_url'] ?? '',
+        'imageUrl' => $row['image_url'] ?? '',
+        'productUrl' => $row['product_url'] ?? '',
+        'sourceName' => is_array($specs) ? (string)($specs['取得元'] ?? '') : '',
         'isDemoPrice' => (bool)$row['is_demo_price'],
     ];
 }
@@ -138,9 +141,14 @@ function clean_product(array $input): array
     $specs = $input['specs'] ?? new stdClass();
     if (!is_array($specs) && !is_object($specs)) json_response(['error' => '仕様は項目と値のオブジェクトで指定してください。'], 422);
     if (strlen(json_encode($specs, JSON_UNESCAPED_UNICODE) ?: '') > 12000) json_response(['error' => '仕様が長すぎます。'], 422);
-    $url = trim((string)($input['manufacturerUrl'] ?? ''));
-    if ($url !== '' && (!filter_var($url, FILTER_VALIDATE_URL) || !in_array(strtolower((string)parse_url($url, PHP_URL_SCHEME)), ['https', 'http'], true))) {
-        json_response(['error' => 'メーカー情報URLはhttpまたはhttpsで入力してください。'], 422);
+    $urls = [];
+    foreach (['manufacturerUrl' => 'メーカー情報URL', 'imageUrl' => '商品画像URL', 'productUrl' => '販売元URL'] as $field => $label) {
+        $value = trim((string)($input[$field] ?? ''));
+        if ($value !== '' && (!filter_var($value, FILTER_VALIDATE_URL) || !in_array(strtolower((string)parse_url($value, PHP_URL_SCHEME)), ['https', 'http'], true))) {
+            json_response(['error' => $label . 'はhttpまたはhttpsで入力してください。'], 422);
+        }
+        if (strlen($value) > 1000) json_response(['error' => $label . 'が長すぎます。'], 422);
+        $urls[$field] = $value === '' ? null : $value;
     }
     return [
         'name' => $name,
@@ -153,7 +161,9 @@ function clean_product(array $input): array
         'stock' => $stock,
         'description' => mb_substr(trim((string)($input['description'] ?? '')), 0, 2000),
         'specs' => json_encode($specs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        'manufacturer_url' => $url === '' ? null : $url,
+        'manufacturer_url' => $urls['manufacturerUrl'],
+        'image_url' => $urls['imageUrl'],
+        'product_url' => $urls['productUrl'],
         'is_demo_price' => !empty($input['isDemoPrice']) ? 1 : 0,
     ];
 }

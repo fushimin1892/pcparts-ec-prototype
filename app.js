@@ -53,14 +53,39 @@ function normalizeApiProduct(product) {
     price: Number(product.price) || 0, stock: Number(product.stock) || 0, rating: Number(product.rating) || 0,
     reviews: Number(product.reviews) || 0, description: String(product.description || ""),
     specs: product.specs && typeof product.specs === "object" ? product.specs : {},
-    manufacturerUrl: String(product.manufacturerUrl || ""), isDemoPrice: Boolean(product.isDemoPrice),
+    manufacturerUrl: String(product.manufacturerUrl || ""), imageUrl: String(product.imageUrl || ""), productUrl: String(product.productUrl || ""),
+    sourceName: String(product.sourceName || product.specs?.["取得元"] || ""), isDemoPrice: Boolean(product.isDemoPrice),
   };
 }
 
 function safeHttpUrl(value) {
-  try { const parsed = new URL(String(value || "")); return ["http:", "https:"].includes(parsed.protocol) ? safeText(parsed.href) : ""; }
+  const url = httpUrl(value);
+  return url ? safeText(url) : "";
+}
+
+function httpUrl(value) {
+  try { const parsed = new URL(String(value || "")); return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : ""; }
   catch { return ""; }
 }
+
+function productImage(product, label = product.shortName || product.name, extraClass = "") {
+  const imageUrl = safeHttpUrl(product.imageUrl);
+  return imageUrl
+    ? `<img class="catalog-product-image ${extraClass}" src="${imageUrl}" alt="${safeText(label)}" loading="lazy" referrerpolicy="no-referrer"><span class="product-image-fallback" hidden>${artFor(product.type, label)}</span>`
+    : artFor(product.type, label);
+}
+
+document.addEventListener("error", (event) => {
+  if (!event.target.matches?.(".catalog-product-image")) return;
+  event.target.hidden = true;
+  const fallback = event.target.parentElement?.querySelector(".product-image-fallback");
+  if (fallback) fallback.hidden = false;
+}, true);
+document.addEventListener("load", (event) => {
+  if (!event.target.matches?.(".catalog-product-image")) return;
+  const fallback = event.target.parentElement?.querySelector(".product-image-fallback");
+  if (fallback) fallback.hidden = true;
+}, true);
 
 async function refreshServerCatalog() {
   if (!apiConfigured) return;
@@ -167,9 +192,11 @@ let favorites = storage.get("pcparts-favorites", []);
 let currentUser = storage.get("pcparts-user", null);
 let orders = storage.get("pcparts-orders", []);
 let catalogFilter = { category: "すべて", query: "", min: "", max: "", sort: "おすすめ順" };
+let catalogPage = 1;
 let adminQuery = "";
 let adminCategory = "すべて";
 let adminPlatform = "すべて";
+let adminPage = 1;
 let detailQuantity = 1;
 let wizardStep = 0;
 let wizardAnswers = { budget: "", use: "", games: "", style: "", equipment: "", conditions: "" };
@@ -268,6 +295,7 @@ function syncHeader() { document.querySelector("#cart-count").textContent = cart
 function addToCart(id, quantity = 1) {
   const product = findProduct(id);
   if (!product) return;
+  if (Number(product.stock) < (Number(cart[id]) || 0) + quantity) { showToast("管理画面で在庫を確認してからカートに追加してください"); return; }
   cart[id] = (Number(cart[id]) || 0) + quantity;
   persistCart();
   showToast(`${product.shortName} をカートに追加しました`);
@@ -283,13 +311,13 @@ function toggleFavorite(id) {
 function productCard(product, compact = false) {
   const favored = favorites.includes(product.id);
   const rating = product.reviews ? `★★★★★ <span>${safeText(product.rating)} (${safeText(product.reviews)})</span>` : `<span class="rating-empty">レビュー未登録</span>`;
-  const priceBadge = product.isDemoPrice ? `<span class="badge badge--gray">仮価格</span>` : `<span class="badge">在庫あり</span>`;
+  const priceBadge = Number(product.stock) < 1 ? `<span class="badge badge--warning">在庫未確認</span>` : product.isDemoPrice ? `<span class="badge badge--gray">参考価格</span>` : `<span class="badge">在庫あり</span>`;
   return `<article class="product-card ${compact ? "product-card--compact" : ""}">
     <button class="favorite-toggle ${favored ? "is-active" : ""}" data-action="favorite" data-id="${safeText(product.id)}" aria-label="お気に入り${favored ? "解除" : "追加"}">${favored ? "♥" : "♡"}</button>
-    <div class="product-card__image" data-go="detail" data-id="${safeText(product.id)}">${artFor(product.type, product.shortName)}</div>
+    <div class="product-card__image" data-go="detail" data-id="${safeText(product.id)}">${productImage(product)}</div>
     <div class="product-card__body"><div class="product-meta"><span class="product-category">${safeText(product.category)} / ${safeText(product.maker)}</span>${priceBadge}</div>
       <h3><a href="#/detail/${encodeURIComponent(product.id)}">${safeText(product.name)}</a></h3><div class="product-rating">${rating}</div>
-      <div class="product-card__bottom"><div class="price">${yen(product.price)}<small>税込</small></div><button class="button" data-action="add-cart" data-id="${product.id}">カートに追加</button></div>
+      <div class="product-card__bottom"><div class="price">${yen(product.price)}<small>${product.isDemoPrice ? "参考" : "税込"}</small></div>${Number(product.stock) > 0 ? `<button class="button" data-action="add-cart" data-id="${safeText(product.id)}">カートに追加</button>` : `<button class="button" disabled>在庫確認中</button>`}</div>
     </div>
   </article>`;
 }
@@ -315,7 +343,10 @@ function categoryCards() {
 
 function renderHome() {
   const filtered = getFilteredProducts();
-  const mainProducts = catalogFilter.category === "すべて" && !catalogFilter.query && !catalogFilter.min && !catalogFilter.max ? products.slice(0, 6) : filtered;
+  const pageSize = 24;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  catalogPage = Math.min(catalogPage, pageCount);
+  const mainProducts = filtered.slice((catalogPage - 1) * pageSize, catalogPage * pageSize);
   app.innerHTML = `<section class="hero">
       <div class="hero__art"><div class="hero-glow"></div><div class="hero-machine"><div class="hero-machine__glass"><div class="hero-machine__fan-stack"><i class="fan"></i><i class="fan"></i><i class="fan"></i></div><div class="hero-machine__gpu"></div></div></div></div>
       <div class="hero__copy"><span class="hero__tag">PC PARTS, YOUR WAY</span><h1>自分だけの理想のPCを、<em>ここから。</em></h1><p>はじめてのパーツ選びも、AIと一緒なら迷わない。<br />予算と用途に合わせた構成を見つけよう。</p><div style="display:flex;gap:9px;flex-wrap:wrap"><button class="button" data-go="ai">✳ AIとPC構成を相談</button><button class="button button--outline" data-scroll="categories">商品を探す →</button></div></div>
@@ -326,8 +357,9 @@ function renderHome() {
       <section id="categories"><div class="section-heading"><div><span class="eyebrow">FIND YOUR PARTS</span><h2>カテゴリから探す</h2></div><button class="text-link" data-category="すべて">すべて見る →</button></div><div class="category-grid">${categoryCards()}</div></section>
       <section><div class="section-heading"><div><span class="eyebrow">CURATED FOR YOU</span><h2>${catalogFilter.category === "すべて" ? "おすすめパーツ" : catalogFilter.category}</h2><p>人気のPCパーツをピックアップしました。</p></div><button class="text-link" data-action="clear-filter">商品一覧を見る →</button></div>
         <div class="filter-panel panel"><div class="filter-panel__top"><strong>条件を指定して探す</strong><button class="text-link" data-action="clear-filter">クリア</button></div><form id="filter-form" class="filter-controls"><div class="filter-price"><input class="field" name="min" type="number" min="0" placeholder="下限なし" value="${safeText(catalogFilter.min)}" /><span>〜</span><input class="field" name="max" type="number" min="0" placeholder="上限なし" value="${safeText(catalogFilter.max)}" /></div><select class="select" name="category"><option ${catalogFilter.category === "すべて" ? "selected" : ""}>すべて</option>${categoryItems.map(([name]) => `<option ${catalogFilter.category === name ? "selected" : ""}>${name}</option>`).join("")}</select><input class="field" name="query" placeholder="キーワードで探す" value="${safeText(catalogFilter.query)}" /><button class="button" type="submit">絞り込む</button></form></div>
-        <div class="product-toolbar"><div class="result-count">商品一覧 <strong>${mainProducts.length}</strong> 点</div><div class="toolbar-actions"><label for="sort-select">並び替え</label><select id="sort-select" class="select"><option>おすすめ順</option><option ${catalogFilter.sort === "価格が安い順" ? "selected" : ""}>価格が安い順</option><option ${catalogFilter.sort === "価格が高い順" ? "selected" : ""}>価格が高い順</option><option ${catalogFilter.sort === "評価が高い順" ? "selected" : ""}>評価が高い順</option></select><div class="view-toggle"><button class="is-active" aria-label="グリッド表示">▦</button><button aria-label="リスト表示">☰</button></div></div></div>
+        <div class="product-toolbar"><div class="result-count">全 <strong>${filtered.length}</strong> 件中 ${filtered.length ? (catalogPage - 1) * pageSize + 1 : 0}〜${Math.min(catalogPage * pageSize, filtered.length)} 件</div><div class="toolbar-actions"><label for="sort-select">並び替え</label><select id="sort-select" class="select"><option>おすすめ順</option><option ${catalogFilter.sort === "価格が安い順" ? "selected" : ""}>価格が安い順</option><option ${catalogFilter.sort === "価格が高い順" ? "selected" : ""}>価格が高い順</option><option ${catalogFilter.sort === "評価が高い順" ? "selected" : ""}>評価が高い順</option></select><div class="view-toggle"><button class="is-active" aria-label="グリッド表示">▦</button><button aria-label="リスト表示">☰</button></div></div></div>
         <div class="product-grid">${mainProducts.length ? mainProducts.map((product) => productCard(product)).join("") : `<div class="empty-state"><div class="empty-state__icon">⌕</div><h2>商品が見つかりません</h2><p>検索条件を変えて、もう一度お試しください。</p><button class="button button--outline" data-action="clear-filter">条件をリセット</button></div>`}</div>
+        ${pageCount > 1 ? `<nav class="catalog-pagination" aria-label="商品一覧のページ移動"><button class="button button--outline" data-action="catalog-page" data-page="${catalogPage - 1}" ${catalogPage === 1 ? "disabled" : ""}>← 前へ</button><span>${catalogPage} / ${pageCount} ページ</span><button class="button button--outline" data-action="catalog-page" data-page="${catalogPage + 1}" ${catalogPage === pageCount ? "disabled" : ""}>次へ →</button></nav>` : ""}
       </section>
     </div><aside class="home-sidebar"><section class="side-card"><div class="side-card__head"><strong>人気ランキング</strong><span class="eyebrow">TOP 3</span></div><div class="side-card__body">${[products[0], products[1], products[5]].map((product, index) => `<div class="ranking-item"><span class="ranking-item__number">0${index + 1}</span>${artFor(product.type, product.shortName)}<div class="ranking-item__copy"><strong>${product.shortName}</strong><span>${yen(product.price)}</span></div></div>`).join("")}</div></section><section class="promo-tile"><span class="eyebrow">BUILD WITH AI</span><strong>パーツ選びを、もっと楽しく。</strong><span>希望や条件を自由入力して相談</span><button class="text-link" style="padding:0;margin-top:16px;color:#fff" data-go="ai">AI相談をはじめる →</button></section></aside></div>`;
   syncHeader();
@@ -343,7 +375,12 @@ function renderDetail(id) {
   detailQuantity = 1;
   const rating = product.reviews ? `★★★★★ <span>${safeText(product.rating)}（${safeText(product.reviews)}件のレビュー）</span>` : `<span class="rating-empty">レビュー未登録</span>`;
   const specs = Object.entries(product.specs || {}).map(([key, value]) => `<tr><th>${safeText(key)}</th><td>${safeText(value)}</td></tr>`).join("");
-  app.innerHTML = `${breadcrumb(safeText(product.name))}<div class="product-layout"><div class="product-gallery panel"><div class="product-gallery__main">${artFor(product.type, product.name)}</div><div class="product-gallery__thumbs"><button>${artFor(product.type, product.shortName)}</button><button>${artFor(product.type, product.shortName)}</button><button>${artFor(product.type, product.shortName)}</button></div></div><section class="product-info"><span class="badge badge--blue">${safeText(product.category)}</span><h1>${safeText(product.name)}</h1><div class="product-info__reviews">${rating}</div><div class="product-info__price"><strong class="price">${yen(product.price)}</strong><span class="tax-note">税込・在庫 ${Number(product.stock) || 0} 点${product.isDemoPrice ? " / 仮価格" : ""}</span></div><p style="color:#6f7e92;font-size:12px;line-height:1.9">${safeText(product.description)}</p><table class="spec-table"><tbody>${specs}</tbody></table><div class="quantity-row"><span style="font-size:11px">数量</span><div class="quantity-stepper"><button data-action="detail-quantity" data-delta="-1">−</button><span id="detail-quantity">1</span><button data-action="detail-quantity" data-delta="1">＋</button></div></div><div class="product-info__actions"><button class="button button--outline" data-action="favorite" data-id="${safeText(product.id)}">${favorites.includes(product.id) ? "♥ お気に入り済み" : "♡ お気に入りに追加"}</button><button class="button" data-action="add-detail" data-id="${safeText(product.id)}">カートに追加</button><button class="button button--dark" data-action="buy-now" data-id="${safeText(product.id)}">今すぐ購入</button></div></section></div><section class="product-description"><h2>商品説明</h2><p>${safeText(product.description)}<br />登録された商品情報です。デモ環境の価格・在庫は実際の販売データではありません。</p></section>`;
+  const sourceLink = safeHttpUrl(product.productUrl);
+  const stock = Number(product.stock) || 0;
+  const purchaseButtons = stock > 0
+    ? `<div class="quantity-row"><span style="font-size:11px">数量（在庫 ${stock} 点）</span><div class="quantity-stepper"><button data-action="detail-quantity" data-delta="-1">−</button><span id="detail-quantity">1</span><button data-action="detail-quantity" data-delta="1">＋</button></div></div><button class="button" data-action="add-detail" data-id="${safeText(product.id)}">カートに追加</button><button class="button button--dark" data-action="buy-now" data-id="${safeText(product.id)}">今すぐ購入</button>`
+    : `<p class="stock-review-note">外部APIから取得した商品です。自社の在庫と販売価格を管理画面で確認するとカートに追加できます。</p><button class="button" disabled>在庫確認中</button>`;
+  app.innerHTML = `${breadcrumb(safeText(product.name))}<div class="product-layout"><div class="product-gallery panel"><div class="product-gallery__main">${productImage(product, product.name)}</div></div><section class="product-info"><span class="badge badge--blue">${safeText(product.category)}</span><h1>${safeText(product.name)}</h1><div class="product-info__reviews">${rating}</div><div class="product-info__price"><strong class="price">${yen(product.price)}</strong><span class="tax-note">${product.isDemoPrice ? "API取得時点の参考価格" : "税込"}・自社在庫 ${stock} 点</span></div><p style="color:#6f7e92;font-size:12px;line-height:1.9">${safeText(product.description)}</p>${product.sourceName ? `<p class="source-caption">情報取得元：${safeText(product.sourceName)}</p>` : ""}${sourceLink ? `<a class="source-product-link" href="${sourceLink}" target="_blank" rel="noopener noreferrer">販売元の商品ページを確認 ↗</a>` : ""}<table class="spec-table"><tbody>${specs}</tbody></table><div class="product-info__actions"><button class="button button--outline" data-action="favorite" data-id="${safeText(product.id)}">${favorites.includes(product.id) ? "♥ お気に入り済み" : "♡ お気に入りに追加"}</button>${purchaseButtons}</div></section></div><section class="product-description"><h2>商品情報</h2><p>${safeText(product.description)}<br />外部API情報は取得時点の参考情報です。実際の販売価格・在庫と一致するとは限りません。</p></section>`;
   syncHeader();
 }
 
@@ -450,8 +487,10 @@ function renderAdminContent() {
   }
   if (apiConfigured && !adminAuthenticated) { go("admin-login"); return; }
   const query = adminQuery.trim().toLowerCase();
-  const shown = products.filter((product) => (adminCategory === "すべて" || product.category === adminCategory) && (adminPlatform === "すべて" || product.platform === adminPlatform) && (!query || `${product.name} ${product.maker} ${product.platform || ""} ${product.category}`.toLowerCase().includes(query)));
-  app.innerHTML = `${breadcrumb("商品管理", "管理者ページ")}<div class="page-heading"><div><span class="eyebrow">SHOP MANAGEMENT</span><h1>商品管理</h1><p>登録した商品は商品一覧とカートに表示されます。</p></div></div><div class="admin-toolbar"><div class="admin-toolbar__copy"><strong>登録商品一覧</strong><small>${shown.length} 件を表示（全 ${products.length} 件） / ${apiConfigured ? "MySQLカタログに保存" : "このブラウザに保存"}</small></div><div class="admin-toolbar-actions"><button class="button" data-action="admin-add">＋ 商品を登録</button><button class="button button--outline" data-action="admin-logout">ログアウト</button></div></div><form id="admin-filter-form" class="filter-controls admin-filter"><input class="field" name="query" type="search" placeholder="商品名・メーカーで検索" value="${safeText(adminQuery)}"><select class="select" name="category"><option ${adminCategory === "すべて" ? "selected" : ""}>すべて</option>${categoryItems.map(([name]) => `<option ${adminCategory === name ? "selected" : ""}>${safeText(name)}</option>`).join("")}</select><button class="button button--outline" type="submit">検索</button></form><div class="table-wrap"><table class="data-table"><thead><tr><th>商品情報</th><th>カテゴリ</th><th>価格</th><th>在庫数</th><th>操作</th></tr></thead><tbody>${shown.map((product) => `<tr><td><div class="table-product">${artFor(product.type, product.shortName)}<span><strong>${safeText(product.name)}</strong><small>${safeText(product.maker)}${product.isDemoPrice ? " ・仮価格" : ""}</small></span></div></td><td>${safeText(product.category)}</td><td>${yen(product.price)}</td><td>${Number(product.stock) || 0}</td><td><div class="table-actions"><button class="button button--outline" data-action="admin-edit" data-id="${safeText(product.id)}">編集</button><button class="button button--danger" data-action="admin-delete" data-id="${safeText(product.id)}">削除</button></div></td></tr>`).join("") || `<tr><td colspan="5">条件に合う商品がありません。</td></tr>`}</tbody></table></div>`;
+  const allShown = products.filter((product) => (adminCategory === "すべて" || product.category === adminCategory) && (adminPlatform === "すべて" || product.platform === adminPlatform) && (!query || `${product.name} ${product.maker} ${product.platform || ""} ${product.category}`.toLowerCase().includes(query)));
+  const pageSize = 50; const pageCount = Math.max(1, Math.ceil(allShown.length / pageSize)); adminPage = Math.min(adminPage, pageCount);
+  const shown = allShown.slice((adminPage - 1) * pageSize, adminPage * pageSize);
+  app.innerHTML = `${breadcrumb("商品管理", "管理者ページ")}<div class="page-heading"><div><span class="eyebrow">SHOP MANAGEMENT</span><h1>商品管理</h1><p>登録した商品は商品一覧とカートに表示されます。</p></div></div><div class="admin-toolbar"><div class="admin-toolbar__copy"><strong>登録商品一覧</strong><small>${allShown.length} 件を表示（全 ${products.length} 件） / ${apiConfigured ? "MySQLカタログに保存" : "このブラウザに保存"}</small></div><div class="admin-toolbar-actions"><button class="button" data-action="admin-add">＋ 商品を登録</button><button class="button button--outline" data-action="admin-import">JSON一括登録</button><button class="button button--outline" data-action="admin-logout">ログアウト</button></div></div><form id="admin-filter-form" class="filter-controls admin-filter"><input class="field" name="query" type="search" placeholder="商品名・メーカーで検索" value="${safeText(adminQuery)}"><select class="select" name="category"><option ${adminCategory === "すべて" ? "selected" : ""}>すべて</option>${categoryItems.map(([name]) => `<option ${adminCategory === name ? "selected" : ""}>${safeText(name)}</option>`).join("")}</select><button class="button button--outline" type="submit">検索</button></form><div class="table-wrap"><table class="data-table"><thead><tr><th>商品情報</th><th>カテゴリ</th><th>価格</th><th>在庫数</th><th>操作</th></tr></thead><tbody>${shown.map((product) => `<tr><td><div class="table-product">${productImage(product)}<span><strong>${safeText(product.name)}</strong><small>${safeText(product.maker)}${product.isDemoPrice ? " ・仮価格" : ""}</small></span></div></td><td>${safeText(product.category)}</td><td>${yen(product.price)}</td><td>${Number(product.stock) || 0}</td><td><div class="table-actions"><button class="button button--outline" data-action="admin-edit" data-id="${safeText(product.id)}">編集</button><button class="button button--danger" data-action="admin-delete" data-id="${safeText(product.id)}">削除</button></div></td></tr>`).join("") || `<tr><td colspan="5">条件に合う商品がありません。</td></tr>`}</tbody></table></div>${pageCount > 1 ? `<nav class="catalog-pagination" aria-label="管理画面のページ移動"><button class="button button--outline" data-action="admin-page" data-page="${adminPage - 1}" ${adminPage === 1 ? "disabled" : ""}>← 前へ</button><span>${adminPage} / ${pageCount} ページ</span><button class="button button--outline" data-action="admin-page" data-page="${adminPage + 1}" ${adminPage === pageCount ? "disabled" : ""}>次へ →</button></nav>` : ""}`;
 }
 
 function enhanceAdminScreen() {
@@ -473,7 +512,8 @@ function enhanceAdminScreen() {
     header.cells[1]?.after(platformHeader);
   }
   const query = adminQuery.trim().toLowerCase();
-  const shown = products.filter((product) => (adminCategory === "すべて" || product.category === adminCategory) && (adminPlatform === "すべて" || product.platform === adminPlatform) && (!query || `${product.name} ${product.maker} ${product.platform || ""} ${product.category}`.toLowerCase().includes(query)));
+  const allShown = products.filter((product) => (adminCategory === "すべて" || product.category === adminCategory) && (adminPlatform === "すべて" || product.platform === adminPlatform) && (!query || `${product.name} ${product.maker} ${product.platform || ""} ${product.category}`.toLowerCase().includes(query)));
+  const shown = allShown.slice((adminPage - 1) * 50, adminPage * 50);
   const rows = table.tBodies[0]?.rows || [];
   if (shown.length) {
     shown.forEach((product, index) => {
@@ -501,10 +541,64 @@ function persistCatalog() {
 
 function adminProductForm(product = null) {
   const editing = Boolean(product);
-  const values = product || { name: "", shortName: "", maker: "", category: "CPU", price: "", stock: "", description: "", specs: {}, manufacturerUrl: "", isDemoPrice: false };
+  const values = product || { name: "", shortName: "", maker: "", category: "CPU", price: "", stock: "", description: "", specs: {}, manufacturerUrl: "", imageUrl: "", productUrl: "", isDemoPrice: false };
   const specsText = Object.entries(values.specs || {}).map(([key, value]) => `${key}: ${value}`).join("\n");
   const options = categoryItems.map(([name]) => `<option value="${safeText(name)}" ${values.category === name ? "selected" : ""}>${safeText(name)}</option>`).join("");
-  openModal(editing ? "商品情報を編集" : "商品を登録", `<form id="admin-product-form" class="admin-product-form" data-id="${safeText(values.id || "")}"><div class="form-grid"><label class="form-field form-field--full"><span>商品名 *</span><input class="input" name="name" required maxlength="120" value="${safeText(values.name)}" placeholder="例）AMD Ryzen 7 9800X3D"></label><label class="form-field"><span>表示名</span><input class="input" name="shortName" maxlength="80" value="${safeText(values.shortName || "")}" placeholder="一覧に表示する短い名前"></label><label class="form-field"><span>メーカー</span><input class="input" name="maker" maxlength="80" value="${safeText(values.maker || "")}" placeholder="例）AMD"></label><label class="form-field"><span>カテゴリ *</span><select class="select" name="category" required>${options}<option value="その他" ${!categoryItems.some(([name]) => name === values.category) && values.category !== "CPU" ? "selected" : ""}>その他</option></select></label><label class="form-field"><span>価格（円） *</span><input class="input" name="price" type="number" min="0" step="1" required value="${safeText(values.price)}"></label><label class="form-field"><span>在庫数 *</span><input class="input" name="stock" type="number" min="0" step="1" required value="${safeText(values.stock)}"></label><label class="form-field form-field--full"><span>商品説明</span><textarea name="description" maxlength="1000" rows="3" placeholder="商品の特徴">${safeText(values.description || "")}</textarea></label><label class="form-field form-field--full"><span>仕様（1行に「項目名: 値」）</span><textarea name="specs" maxlength="3000" rows="6" placeholder="コア / スレッド: 8 / 16\nソケット: AM5">${safeText(specsText)}</textarea></label><label class="form-field form-field--full"><span>メーカー公式情報URL</span><input class="input" name="manufacturerUrl" type="url" maxlength="1000" value="${safeText(values.manufacturerUrl || "")}" placeholder="https://"></label><label class="form-check form-field--full"><input name="demoPrice" type="checkbox" ${values.isDemoPrice ? "checked" : ""}><span>試作用の仮価格として表示する</span></label></div><p class="form-hint">登録した商品のみ購入候補になります。${apiConfigured ? "MySQLへ保存します。" : "登録内容はこのブラウザ内に保存されます。"}</p><div class="modal-form-actions"><button class="button button--outline" type="button" data-action="close-modal">キャンセル</button><button class="button" type="submit">${editing ? "変更を保存" : "商品を登録"}</button></div></form>`);
+  openModal(editing ? "商品情報を編集" : "商品を登録", `<form id="admin-product-form" class="admin-product-form" data-id="${safeText(values.id || "")}"><div class="form-grid">
+    <label class="form-field form-field--full"><span>商品名 *</span><input class="input" name="name" required maxlength="120" value="${safeText(values.name)}" placeholder="例）AMD Ryzen 7 9800X3D"></label>
+    <label class="form-field"><span>表示名</span><input class="input" name="shortName" maxlength="80" value="${safeText(values.shortName || "")}" placeholder="一覧に表示する短い名前"></label>
+    <label class="form-field"><span>メーカー</span><input class="input" name="maker" maxlength="80" value="${safeText(values.maker || "")}" placeholder="例）AMD"></label>
+    <label class="form-field"><span>カテゴリ *</span><select class="select" name="category" required>${options}<option value="その他" ${!categoryItems.some(([name]) => name === values.category) && values.category !== "CPU" ? "selected" : ""}>その他</option></select></label>
+    <label class="form-field"><span>価格（円） *</span><input class="input" name="price" type="number" min="0" step="1" required value="${safeText(values.price)}"></label>
+    <label class="form-field"><span>在庫数 *</span><input class="input" name="stock" type="number" min="0" step="1" required value="${safeText(values.stock)}"></label>
+    <label class="form-field form-field--full"><span>商品画像URL</span><input class="input" name="imageUrl" type="url" maxlength="1000" value="${safeText(values.imageUrl || "")}" placeholder="https://... / API画像URLでも可"></label>
+    <label class="form-field form-field--full"><span>販売元の商品ページURL</span><input class="input" name="productUrl" type="url" maxlength="1000" value="${safeText(values.productUrl || "")}" placeholder="https://..."></label>
+    <label class="form-field form-field--full"><span>商品説明</span><textarea name="description" maxlength="1000" rows="3" placeholder="商品の特徴">${safeText(values.description || "")}</textarea></label>
+    <label class="form-field form-field--full"><span>仕様（1行に「項目名: 値」）</span><textarea name="specs" maxlength="3000" rows="6" placeholder="コア / スレッド: 8 / 16\nソケット: AM5">${safeText(specsText)}</textarea></label>
+    <label class="form-field"><span>情報取得元・ショップ名</span><input class="input" name="sourceName" maxlength="100" value="${safeText(values.sourceName || "")}" placeholder="例）ツクモ"></label>
+    <label class="form-field"><span>メーカー公式情報URL</span><input class="input" name="manufacturerUrl" type="url" maxlength="1000" value="${safeText(values.manufacturerUrl || "")}" placeholder="https://"></label>
+    <label class="form-check form-field--full"><input name="demoPrice" type="checkbox" ${values.isDemoPrice ? "checked" : ""}><span>試作用・外部API取得時点の仮価格として表示する</span></label>
+    </div><p class="form-hint">登録した商品のみ購入候補になります。${apiConfigured ? "MySQLへ保存します。" : "登録内容はこのブラウザ内に保存されます。"}</p><div class="modal-form-actions"><button class="button button--outline" type="button" data-action="close-modal">キャンセル</button><button class="button" type="submit">${editing ? "変更を保存" : "商品を登録"}</button></div></form>`);
+}
+
+let pendingCatalogImport = [];
+function adminImportForm() {
+  pendingCatalogImport = [];
+  openModal("商品データを一括登録", `<div class="admin-import"><p>公式ショッピングAPIから出力したJSONファイルを選択します。最大1,000件。画像URLと販売元の商品ページはAPI提供元のURLを保持します。</p><label class="form-field"><span>カタログJSON</span><input id="catalog-import-file" class="input" type="file" accept=".json,application/json"></label><div id="catalog-import-preview" class="import-preview" aria-live="polite">JSONファイルを選ぶと登録内容を確認できます。</div><div class="modal-form-actions"><button class="button button--outline" type="button" data-action="close-modal">キャンセル</button><button id="catalog-import-confirm" class="button" type="button" data-action="admin-import-confirm" disabled>商品を登録</button></div></div>`);
+}
+
+function validateImportedCatalog(payload) {
+  const items = Array.isArray(payload) ? payload : payload?.items;
+  if (!Array.isArray(items) || !items.length) throw new Error("商品配列が見つかりません。API出力のJSONを選んでください。");
+  if (items.length > 1000) throw new Error("一度に登録できるのは1,000件までです。");
+  const ids = new Set();
+  return items.map((raw, index) => {
+    if (!raw || typeof raw !== "object" || raw.id == null) throw new Error(`${index + 1}件目の商品データを読み取れません。`);
+    const product = normalizeApiProduct(raw);
+    if (!/^[A-Za-z0-9._-]{1,100}$/.test(product.id)) throw new Error(`${index + 1}件目に有効な商品IDがありません。`);
+    if (ids.has(product.id)) throw new Error(`商品ID「${product.id}」がファイル内で重複しています。`);
+    ids.add(product.id);
+    if (!product.name || !categoryItems.some(([category]) => category === product.category) && product.category !== "その他" || !Number.isSafeInteger(product.price) || product.price < 0 || !Number.isSafeInteger(product.stock) || product.stock < 0) throw new Error(`${index + 1}件目の名前・カテゴリ・価格・在庫数を確認してください。`);
+    if (platformCategories.has(product.category) && !platformOptions.includes(product.platform)) throw new Error(`${index + 1}件目の${product.category}にIntel / AMDの指定が必要です。`);
+    if (raw.imageUrl && !httpUrl(raw.imageUrl)) throw new Error(`${index + 1}件目の商品画像URLはhttpまたはhttpsを指定してください。`);
+    if (raw.productUrl && !httpUrl(raw.productUrl)) throw new Error(`${index + 1}件目の販売ページURLはhttpまたはhttpsを指定してください。`);
+    product.imageUrl = httpUrl(raw.imageUrl);
+    product.productUrl = httpUrl(raw.productUrl);
+    return product;
+  });
+}
+
+async function importCatalog(items) {
+  if (apiConfigured) {
+    const result = await apiRequest("admin/products/bulk-import.php", { method: "POST", body: JSON.stringify({ items }) });
+    await refreshServerCatalog();
+    return result.imported;
+  }
+  const byId = new Map(products.map((product) => [product.id, product]));
+  for (const item of items) byId.set(item.id, item);
+  products.splice(0, products.length, ...byId.values());
+  persistCatalog();
+  return items.length;
 }
 
 const wizardQuestions = [
@@ -684,12 +778,20 @@ function productFormValues(form) {
   const stock = Number(data.get("stock"));
   if (!name || !Number.isSafeInteger(price) || price < 0 || !Number.isSafeInteger(stock) || stock < 0) throw new Error("商品名・価格・在庫数を確認してください");
   if (platformCategories.has(category) && !platformOptions.includes(platform)) throw new Error("CPUとマザーボードはIntel / AMDを選択してください");
+  const manufacturerUrl = String(data.get("manufacturerUrl") || "").trim();
+  const imageUrl = String(data.get("imageUrl") || "").trim();
+  const productUrl = String(data.get("productUrl") || "").trim();
+  const sourceName = String(data.get("sourceName") || "").trim();
+  for (const [label, url] of [["メーカー情報URL", manufacturerUrl], ["商品画像URL", imageUrl], ["販売元URL", productUrl]]) {
+    if (url && !safeHttpUrl(url)) throw new Error(`${label}はhttpまたはhttpsのURLを入力してください`);
+  }
+  if (sourceName) specs["取得元"] = sourceName;
   return {
     id: form.dataset.id || `catalog-${Date.now().toString(36)}`, name,
     shortName: String(data.get("shortName") || "").trim() || name,
     maker: String(data.get("maker") || "").trim() || "メーカー未設定", platform, category, type: category === "その他" ? (findProduct(form.dataset.id)?.type || "other") : (typeByCategory[category] || "other"),
     price, stock, rating: 0, reviews: 0, description: String(data.get("description") || "").trim() || "商品説明は準備中です。",
-    specs, manufacturerUrl: String(data.get("manufacturerUrl") || "").trim(), isDemoPrice: data.has("demoPrice"),
+    specs, manufacturerUrl, imageUrl, productUrl, sourceName, isDemoPrice: data.has("demoPrice"),
   };
 }
 
@@ -737,7 +839,7 @@ document.addEventListener("click", (event) => {
   const nav = event.target.closest("[data-go]");
   if (nav) { event.preventDefault(); document.querySelector("#modal-root").innerHTML = ""; closeDrawer(); go(nav.dataset.go, nav.dataset.id || ""); return; }
   const category = event.target.closest("[data-category]");
-  if (category) { closeDrawer(); catalogFilter.category = category.dataset.category; catalogFilter.query = ""; catalogFilter.min = ""; catalogFilter.max = ""; renderHome(); document.querySelector("#categories")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  if (category) { closeDrawer(); catalogFilter.category = category.dataset.category; catalogFilter.query = ""; catalogFilter.min = ""; catalogFilter.max = ""; catalogPage = 1; renderHome(); document.querySelector("#categories")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   const scroll = event.target.closest("[data-scroll]");
   if (scroll) { document.getElementById(scroll.dataset.scroll)?.scrollIntoView({ behavior: "smooth" }); return; }
   const action = event.target.closest("[data-action]");
@@ -746,9 +848,9 @@ document.addEventListener("click", (event) => {
   if (kind === "add-cart") addToCart(id);
   if (kind === "favorite") toggleFavorite(id);
   if (kind === "add-detail") addToCart(id, detailQuantity);
-  if (kind === "detail-quantity") { detailQuantity = Math.max(1, detailQuantity + Number(action.dataset.delta)); document.querySelector("#detail-quantity").textContent = detailQuantity; }
+  if (kind === "detail-quantity") { const product = findProduct(routeInfo().id); detailQuantity = Math.min(Math.max(1, Number(product?.stock) || 1), Math.max(1, detailQuantity + Number(action.dataset.delta))); document.querySelector("#detail-quantity").textContent = detailQuantity; }
   if (kind === "buy-now") { addToCart(id); go("cart"); }
-  if (kind === "change-cart") { cart[id] = Math.max(0, (Number(cart[id]) || 0) + Number(action.dataset.delta)); if (!cart[id]) delete cart[id]; persistCart(); renderCart(); }
+  if (kind === "change-cart") { const next = Math.max(0, (Number(cart[id]) || 0) + Number(action.dataset.delta)); const product = findProduct(id); if (next > Number(product?.stock)) { showToast("管理画面で在庫を確認してから数量を変更してください"); return; } cart[id] = next; if (!cart[id]) delete cart[id]; persistCart(); renderCart(); }
   if (kind === "remove-cart") { delete cart[id]; persistCart(); renderCart(); showToast("カートから商品を削除しました"); }
   if (kind === "checkout") { if (!currentUser) go("auth"); else go("checkout"); }
   if (kind === "place-order") {
@@ -781,14 +883,24 @@ document.addEventListener("click", (event) => {
     };
     orders = [lastOrder, ...orders]; storage.set("pcparts-orders", orders); cart = {}; persistCart(); go("success");
   }
-  if (kind === "clear-filter") { catalogFilter = { category: "すべて", query: "", min: "", max: "", sort: "おすすめ順" }; renderHome(); }
+  if (kind === "clear-filter") { catalogFilter = { category: "すべて", query: "", min: "", max: "", sort: "おすすめ順" }; catalogPage = 1; renderHome(); }
   if (kind === "account-menu") { if (id === "logout") { currentUser = null; storage.set("pcparts-user", currentUser); showToast("ログアウトしました"); go("home"); } else go(id); }
   if (kind === "order-detail") { const order = getSampleOrders().find((item) => item.number === id); if (order) openModal("注文内容", `${safeText(order.date)}のご注文（${safeText(order.number)}）<hr />${order.items.map((item) => { const product = findProduct(item.id); return product ? `<div class="summary-line"><span>${safeText(product.name)} × ${item.quantity}</span><strong>${yen(product.price * item.quantity)}</strong></div>` : ""; }).join("")}<div class="summary-total"><span>合計</span><strong>${yen(order.total)}</strong></div>${order.paymentLabel ? `<div class="summary-line"><span>支払い方法</span><strong>${safeText(order.paymentLabel)}</strong></div>` : ""}${order.paymentStore ? `<div class="summary-line"><span>お支払い先</span><strong>${safeText(order.paymentStore)}</strong></div>` : ""}${order.paymentCode ? `<div class="summary-line"><span>デモ払込番号</span><strong>${safeText(order.paymentCode)}</strong></div>` : ""}${order.paymentDeadline ? `<div class="summary-line"><span>期限（デモ）</span><strong>${safeText(order.paymentDeadline)}</strong></div>` : ""}`); }
   if (kind === "wizard-back") { wizardStep = Math.max(0, wizardStep - 1); renderWizard(); }
   if (kind === "restart-wizard") { serverAiProposal = null; wizardStep = 0; wizardAnswers = { budget: "", use: "", games: "", style: "", equipment: "", conditions: "" }; go("ai"); }
-  if (kind === "add-build") { action.dataset.ids.split(",").forEach((productId) => { if (findProduct(productId)) cart[productId] = (Number(cart[productId]) || 0) + 1; }); persistCart(); showToast("おすすめ構成をカートに追加しました"); go("cart"); }
+  if (kind === "add-build") { const ids = action.dataset.ids.split(","); if (ids.some((productId) => !findProduct(productId)?.stock)) { showToast("在庫未確認の商品を含むため、管理画面で在庫確認が必要です"); return; } ids.forEach((productId) => { cart[productId] = (Number(cart[productId]) || 0) + 1; }); persistCart(); showToast("おすすめ構成をカートに追加しました"); go("cart"); }
   if (kind === "adjust-budget") { const currentBudget = parseBudget(wizardAnswers.budget) || 200000; wizardAnswers.budget = `${Math.max(100000, currentBudget - 20000).toLocaleString("ja-JP")}円`; renderAiResult(); showToast("予算を抑えた構成を再計算しました"); }
   if (kind === "admin-add") adminProductForm();
+  if (kind === "catalog-page") { catalogPage = Math.max(1, Number(action.dataset.page) || 1); renderHome(); document.querySelector(".product-toolbar")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  if (kind === "admin-page") { adminPage = Math.max(1, Number(action.dataset.page) || 1); renderAdmin(); document.querySelector(".admin-toolbar")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  if (kind === "admin-import") adminImportForm();
+  if (kind === "admin-import-confirm") {
+    if (!pendingCatalogImport.length) return;
+    action.disabled = true;
+    importCatalog(pendingCatalogImport).then((count) => {
+      pendingCatalogImport = []; document.querySelector("#modal-root").innerHTML = ""; renderAdmin(); showToast(`${count} 件の商品を一括登録しました`);
+    }).catch((error) => { action.disabled = false; showToast(error.message || "商品一括登録に失敗しました"); });
+  }
   if (kind === "admin-edit") { const product = findProduct(id); if (product) adminProductForm(product); }
   if (kind === "admin-delete") { const product = findProduct(id); if (product) openModal("商品を削除", `<p>「${safeText(product.name)}」を商品一覧から削除しますか？</p><div class="modal-form-actions"><button class="button button--outline" data-action="close-modal">戻る</button><button class="button button--danger" data-action="admin-confirm-delete" data-id="${safeText(product.id)}">削除する</button></div>`); }
   if (kind === "admin-confirm-delete") {
@@ -803,7 +915,26 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("change", (event) => {
-  if (event.target.id === "sort-select") { catalogFilter.sort = event.target.value; renderHome(); }
+  if (event.target.id === "sort-select") { catalogFilter.sort = event.target.value; catalogPage = 1; renderHome(); }
+  if (event.target.id === "catalog-import-file") {
+    const preview = document.querySelector("#catalog-import-preview");
+    const confirm = document.querySelector("#catalog-import-confirm");
+    pendingCatalogImport = [];
+    confirm.disabled = true;
+    const file = event.target.files?.[0];
+    if (!file) { preview.textContent = "JSONファイルを選ぶと登録内容を確認できます。"; return; }
+    file.text().then((text) => {
+      const payload = JSON.parse(text);
+      pendingCatalogImport = validateImportedCatalog(payload);
+      const categories = Object.entries(Object.groupBy ? Object.groupBy(pendingCatalogImport, (item) => item.category) : pendingCatalogImport.reduce((groups, item) => ((groups[item.category] ||= []).push(item), groups), {})).map(([name, items]) => `${name} ${items.length}件`).join(" / ");
+      const images = pendingCatalogImport.filter((item) => item.imageUrl).length;
+      const links = pendingCatalogImport.filter((item) => item.productUrl).length;
+      preview.textContent = `${pendingCatalogImport.length}件を登録します。カテゴリ：${categories}。画像 ${images}件 / 販売ページ ${links}件。`;
+      confirm.disabled = false;
+    }).catch((error) => {
+      preview.textContent = `読み込みできません：${error.message || "JSON形式を確認してください。"}`;
+    });
+  }
   if (event.target.closest("#admin-product-form") && event.target.name === "category") {
     const field = document.querySelector("#product-platform-field");
     const platform = field?.querySelector("select[name='platform']");
@@ -816,17 +947,17 @@ document.addEventListener("submit", (event) => {
   event.preventDefault();
   const form = event.target;
   if (form.id === "filter-form") {
-    const data = new FormData(form); catalogFilter.min = data.get("min") || ""; catalogFilter.max = data.get("max") || ""; catalogFilter.category = data.get("category") || "すべて"; catalogFilter.query = data.get("query") || ""; renderHome();
+    const data = new FormData(form); catalogFilter.min = data.get("min") || ""; catalogFilter.max = data.get("max") || ""; catalogFilter.category = data.get("category") || "すべて"; catalogFilter.query = data.get("query") || ""; catalogPage = 1; renderHome();
   }
   if (form.id === "admin-filter-form") {
-    const data = new FormData(form); adminQuery = String(data.get("query") || ""); adminCategory = String(data.get("category") || "すべて"); adminPlatform = String(data.get("platform") || "すべて"); renderAdmin();
+    const data = new FormData(form); adminQuery = String(data.get("query") || ""); adminCategory = String(data.get("category") || "すべて"); adminPlatform = String(data.get("platform") || "すべて"); adminPage = 1; renderAdmin();
   }
   if (form.id === "admin-product-form") {
     submitAdminProduct(form);
     return;
   }
   if (form.id === "header-search") {
-    const input = document.querySelector("#header-query"); catalogFilter.query = input.value.trim(); catalogFilter.category = "すべて"; go("home"); renderHome(); document.querySelector("#categories")?.scrollIntoView({ behavior: "smooth" });
+    const input = document.querySelector("#header-query"); catalogFilter.query = input.value.trim(); catalogFilter.category = "すべて"; catalogPage = 1; go("home"); renderHome(); document.querySelector("#categories")?.scrollIntoView({ behavior: "smooth" });
   }
   if (form.id === "auth-form") {
     const data = new FormData(form); const mode = form.dataset.mode;

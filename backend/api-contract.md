@@ -25,6 +25,9 @@ MySQLに登録された有効商品を返します。`keyword`、`category`、`p
       "type": "cpu",
       "price": 79800,
       "stock": 5,
+      "imageUrl": "https://example.com/product-image.jpg",
+      "productUrl": "https://example.com/product-page",
+      "sourceName": "情報取得元ショップ名",
       "specs": { "コア / スレッド": "8 / 16", "ソケット": "AM5" },
       "isDemoPrice": true
     }
@@ -48,7 +51,15 @@ Cookieセッションを使う管理者ログイン状態の確認・終了で�
 
 ### `POST /api/products.php`, `PUT /api/products.php?id={catalog_key}`, `DELETE /api/products.php?id={catalog_key}`
 
-セッション中の管理者だけが実行できます。登録・編集できるフィールドは商品名、表示名、メーカー、カテゴリ、プラットフォーム、価格、在庫、説明、仕様、メーカー情報URL、仮価格フラグです。CPUとマザーボードはプラットフォーム（Intel / AMD）が必須です。ソケットも仕様へ登録してください。削除は`is_active=FALSE`にする論理削除です。購入履歴の参照整合性を保ちます。
+セッション中の管理者だけが実行できます。登録・編集できるフィールドは商品名、表示名、メーカー、カテゴリ、プラットフォーム、価格、在庫、商品画像URL、販売元商品ページURL、説明、仕様、メーカー情報URL、仮価格フラグです。CPUとマザーボードはプラットフォーム（Intel / AMD）が必須です。ソケットも仕様へ登録してください。削除は`is_active=FALSE`にする論理削除です。購入履歴の参照整合性を保ちます。
+
+### `POST /api/admin/products/bulk-import.php`
+
+管理者セッション中に最大1,000件をまとめて登録・更新します。JSON本文は`{ "items": [商品データ...] }`です。商品IDで既存行を更新するため、同じ出力JSONを再取込しても商品は重複しません。カテゴリ・Intel/AMDの必須条件・URLを検証してからトランザクションで保存します。
+
+管理画面の「JSON一括登録」では、登録前に件数・カテゴリ・画像URL・販売ページURLを確認できます。GitHub Pagesだけの画面デモは現在のブラウザへ保存され、チーム共有にはPHP / MySQL API接続が必要です。
+
+`node backend/scripts/import_marketplace_catalog.mjs --target=1000 --output=marketplace-products.json`を実行すると、Yahoo!ショッピング、楽天市場、および任意のAmazon.co.jp Creators APIから検索結果を取得し、管理画面へ読み込むJSONを作ります。Yahooと楽天のキーはこのスクリプトの実行環境だけへ設定してください。外部APIの価格・説明・在庫は取得時点の参考値なので、出品前に管理画面で確認してください。画像URLと商品ページURLは各APIの戻り値を保持します。Amazonはアソシエイト/Creators APIの認証設定があるときだけ検索します。
 
 ## `POST /api/ai/consult.php`
 

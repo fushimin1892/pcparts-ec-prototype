@@ -23,7 +23,7 @@ if ($method === 'GET') {
         $conditions[] = 'platform = :platform';
         $params['platform'] = $platform;
     }
-    $stmt = $pdo->prepare('SELECT * FROM products WHERE ' . implode(' AND ', $conditions) . ' ORDER BY category, name LIMIT 500');
+    $stmt = $pdo->prepare('SELECT * FROM products WHERE ' . implode(' AND ', $conditions) . ' ORDER BY category, name LIMIT 2000');
     $stmt->execute($params);
     json_response(['items' => array_map('product_payload', $stmt->fetchAll())]);
 }
@@ -36,7 +36,7 @@ if ($method === 'POST') {
     $key = trim((string)($input['id'] ?? ''));
     if ($key === '') $key = 'catalog-' . bin2hex(random_bytes(8));
     if (!preg_match('/^[A-Za-z0-9._-]{1,100}$/', $key)) json_response(['error' => '商品IDの形式が正しくありません。'], 422);
-    $stmt = $pdo->prepare('INSERT INTO products (catalog_key, name, short_name, maker, category, platform, product_type, price, manufacturer_url, specs, is_demo_price, stock, description, is_active) VALUES (:catalog_key, :name, :short_name, :maker, :category, :platform, :product_type, :price, :manufacturer_url, :specs, :is_demo_price, :stock, :description, TRUE)');
+    $stmt = $pdo->prepare('INSERT INTO products (catalog_key, name, short_name, maker, category, platform, product_type, price, image_url, product_url, manufacturer_url, specs, is_demo_price, stock, description, is_active) VALUES (:catalog_key, :name, :short_name, :maker, :category, :platform, :product_type, :price, :image_url, :product_url, :manufacturer_url, :specs, :is_demo_price, :stock, :description, TRUE)');
     $stmt->execute(['catalog_key' => $key] + $item);
     $select = $pdo->prepare('SELECT * FROM products WHERE catalog_key = ?');
     $select->execute([$key]);
@@ -47,7 +47,7 @@ if ($method === 'PUT') {
     $key = trim((string)($_GET['id'] ?? ''));
     if ($key === '') json_response(['error' => '商品IDを指定してください。'], 400);
     $item = clean_product(json_body());
-    $stmt = $pdo->prepare('UPDATE products SET name=:name, short_name=:short_name, maker=:maker, category=:category, platform=:platform, product_type=:product_type, price=:price, manufacturer_url=:manufacturer_url, specs=:specs, is_demo_price=:is_demo_price, stock=:stock, description=:description, is_active=TRUE WHERE catalog_key=:catalog_key');
+    $stmt = $pdo->prepare('UPDATE products SET name=:name, short_name=:short_name, maker=:maker, category=:category, platform=:platform, product_type=:product_type, price=:price, image_url=:image_url, product_url=:product_url, manufacturer_url=:manufacturer_url, specs=:specs, is_demo_price=:is_demo_price, stock=:stock, description=:description, is_active=TRUE WHERE catalog_key=:catalog_key');
     $stmt->execute($item + ['catalog_key' => $key]);
     if ($stmt->rowCount() === 0) {
         $exists = $pdo->prepare('SELECT 1 FROM products WHERE catalog_key = ?');

@@ -10,7 +10,32 @@ GitHub Pages版はHTML / CSS / JavaScriptだけで動く画面デモです。商
 python -m http.server 8000
 ```
 
-`http://localhost:8000`を開きます。初期カタログには40商品（CPU 28件）を登録しています。管理カテゴリはCPU、GPU、マザーボード、SSD、メモリ、CPUクーラー、ファン、PCケース、PC電源です。CPUとマザーボードはIntel / AMDとソケットを分けて記録します。初期CPU仕様はメーカー公表情報、価格と在庫は試作用の仮値です。管理画面ではカテゴリ・プラットフォームで絞り込み、商品を追加・検索・編集・削除できます。
+`http://localhost:8000`を開きます。初期カタログには40商品（CPU 28件）を登録しています。管理カテゴリはCPU、GPU、マザーボード、SSD、メモリ、CPUクーラー、ファン、PCケース、PC電源です。CPUとマザーボードはIntel / AMDとソケットを分けて記録します。初期CPU仕様はメーカー公表情報、価格と在庫は試作用の仮値です。管理画面ではカテゴリ・プラットフォームで絞り込み、商品を追加・検索・編集・削除できます。商品一覧は24件、管理画面は50件ずつ表示し、ページ移動できます。
+
+### APIから商品を集めて一括登録
+
+外部マーケットの商品をスクレイピングせず公式APIから検索し、画像URL・商品ページURL・ショップ名・説明・取得時点の価格を含むJSONを作れます。Yahoo!ショッピングと楽天市場のキーをローカルPowerShellへ設定します（値はGitHubへ登録しないでください）。
+
+```powershell
+$env:YAHOO_APP_ID = "発行されたClient ID"
+$env:RAKUTEN_APP_ID = "発行されたApplication ID"
+$env:RAKUTEN_ACCESS_KEY = "発行されたAccess Key"
+node backend/scripts/import_marketplace_catalog.mjs --target=1000 --output=marketplace-products.json
+```
+
+その後、管理者としてログインし「JSON一括登録」から生成ファイルを選び、件数・カテゴリ・画像・販売ページを確認して登録します。対応カテゴリは9種で、カテゴリごとに件数を配分します。検索結果が不足するカテゴリは目標より少なくなることがあります。Yahoo APIは1クエリー/秒で取得し、楽天APIは1回最大30件のページ検索を使います。[Yahoo公式API仕様](https://developer.yahoo.co.jp/webapi/shopping/v3/itemsearch.html)は画像の600px取得に対応し、楽天公式APIは画像あり商品の絞り込みと商品ページ・画像URLを返します。[楽天公式API仕様](https://webservice.rakuten.co.jp/index.php/documentation/ichiba-item-search)
+
+商品説明、価格、在庫はAPIを取得した時点の情報です。取り込んだ商品は「参考価格」かつ在庫0で登録するため、管理者が説明・価格・自社在庫を確認して在庫数を設定するまではカートに入れられません。PC工房、ツクモ、Arkなどのショップ名はAPI応答に含まれる場合そのまま保存し、販売元リンクから個別の商品ページを確認できます。直接APIが提供されない店舗ページを大量巡回して価格や画像を集める処理はしません。
+
+Amazon商品は任意でAmazon.co.jp Creators APIから検索できます。Amazonアソシエイト登録、API利用承認、クライアントID / シークレット / Partner Tagが必要です。公式案内では利用開始にアソシエイト登録とAPI認証情報を求め、PA API経由のアクセスには直近30日間の適格販売実績条件が示されており、検索APIは1回最大10件です。ローカル実行環境に次を設定すると、他社APIとあわせて検索します。API資格がない場合はAmazonを省略します。
+
+```powershell
+$env:AMAZON_CREATORS_CLIENT_ID = "発行されたClient ID"
+$env:AMAZON_CREATORS_CLIENT_SECRET = "発行されたClient Secret"
+$env:AMAZON_PARTNER_TAG = "発行されたPartner Tag"
+```
+
+Amazon公式の[Creators API利用条件](https://affiliate-program.amazon.com/creatorsapi/docs/en-us/onboarding)と[商品検索仕様](https://affiliate-program.amazon.com/creatorsapi/docs/en-us/api-reference/operations/search-items)を確認してください。GitHub PagesだけのデモではJSONは登録したブラウザ内に保存され、チーム共通の商品台帳にはなりません。共有するには後段のPHP/MySQL APIを公開して`config.js`に設定する必要があります。
 
 ## PHP / MySQLを起動
 

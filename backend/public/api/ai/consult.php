@@ -15,7 +15,7 @@ $model = env_value('GEMINI_MODEL');
 if (!$apiKey || !$model) json_response(['error' => 'GEMINI_API_KEYとGEMINI_MODELをPHPサーバーに設定してください。'], 503);
 
 $pdo = db();
-$catalogRows = $pdo->query('SELECT * FROM products WHERE is_active=TRUE ORDER BY category, name LIMIT 250')->fetchAll();
+$catalogRows = $pdo->query('SELECT * FROM products WHERE is_active=TRUE AND stock > 0 ORDER BY category, name LIMIT 500')->fetchAll();
 $catalog = array_map('product_payload', $catalogRows);
 
 // Rakuten data is returned only as external comparison context. It never becomes a catalog item or a cart ID.
