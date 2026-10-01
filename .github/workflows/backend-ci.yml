@@ -63,5 +63,7 @@ jobs:
           php -r '$r=json_decode(file_get_contents("http://127.0.0.1:8080/api/products.php"), true); $n=count(array_filter($r["items"] ?? [], fn($p) => $p["category"] === "CPU")); if ($n < 28) { fwrite(STDERR, "Expected 28 seeded CPUs; found $n\n"); exit(1); } echo "Public catalog CPUs: $n\n";'
           php backend/scripts/create_admin.php ci@example.test 'CI Admin'
           curl -fsS -c /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"email":"ci@example.test","password":"ci-only-test-password-012345"}' http://127.0.0.1:8080/api/admin/login.php | grep -q '"ok":true'
+          curl -fsS -b /tmp/pcparts-cookie.txt http://127.0.0.1:8080/api/admin/status.php | grep -q '"authenticated":true'
           curl -fsS -b /tmp/pcparts-cookie.txt -H 'Content-Type: application/json' -d '{"id":"ci-smoke-product","name":"CI smoke product","shortName":"CI smoke","maker":"CI","category":"CPU","type":"cpu","price":1,"stock":1,"description":"CI only","specs":{},"isDemoPrice":true}' http://127.0.0.1:8080/api/products.php | grep -q 'ci-smoke-product'
+          curl -fsS -b /tmp/pcparts-cookie.txt -X PUT -H 'Content-Type: application/json' -d '{"name":"CI smoke product updated","shortName":"CI smoke","maker":"CI","category":"CPU","type":"cpu","price":2,"stock":1,"description":"CI only","specs":{},"isDemoPrice":true}' 'http://127.0.0.1:8080/api/products.php?id=ci-smoke-product' | grep -q '"price":2'
           curl -fsS -b /tmp/pcparts-cookie.txt -X DELETE 'http://127.0.0.1:8080/api/products.php?id=ci-smoke-product' | grep -q '"deleted":true'

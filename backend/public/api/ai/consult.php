@@ -75,9 +75,9 @@ $prompt = [
     'rakutenReferences' => $references,
 ];
 $requestJson = json_encode(['contents' => [['parts' => [['text' => json_encode($prompt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]]]], 'generationConfig' => ['temperature' => 0.2, 'responseMimeType' => 'application/json']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-$endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . rawurlencode($apiKey);
+$endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
 $curl = curl_init($endpoint);
-curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_POST => true, CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_POSTFIELDS => $requestJson]);
+curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_POST => true, CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $apiKey], CURLOPT_POSTFIELDS => $requestJson]);
 $geminiBody = curl_exec($curl);
 $geminiStatus = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
 curl_close($curl);

@@ -48,7 +48,7 @@ docker compose -f backend/docker-compose.yml exec -e DB_HOST=db -e ADMIN_PASSWOR
 window.PC_PARTS_API_BASE_URL = "https://api.example.com/api";
 ```
 
-別ドメインのPHPサーバーを使う場合、`APP_ALLOWED_ORIGINS`にGitHub PagesのURLを完全一致で追加し、HTTPS、`SESSION_SAMESITE=None`、`SESSION_SECURE=true`を設定してください。ブラウザのサードパーティCookie制限があるため、本番ではフロントとAPIを同じサイト（同一ドメイン配下）に置く構成を推奨します。
+別ドメインのPHPサーバーを使う場合、`APP_ALLOWED_ORIGINS`にはパスを含まないOrigin（例：`https://fushimin1892.github.io`）を完全一致で追加し、HTTPS、`SESSION_SAMESITE=None`、`SESSION_SECURE=true`を設定してください。ブラウザのサードパーティCookie制限があるため、本番ではフロントとAPIを同じサイト（同一ドメイン配下）に置く構成を推奨します。
 
 ## GitHub Pagesと本番サーバー
 
