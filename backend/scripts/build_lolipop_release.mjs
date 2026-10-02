@@ -7,6 +7,7 @@ const backendRoot = path.join(projectRoot, 'backend');
 const publicRoot = path.join(backendRoot, 'public');
 const outputRoot = path.join(backendRoot, 'dist-lolipop');
 const privateRoot = path.join(outputRoot, '_private');
+const localConfigPath = path.join(privateRoot, 'config.local.php');
 const basePathArg = process.argv.find((value) => value.startsWith('--base-path='))?.slice('--base-path='.length) ?? '';
 const basePath = basePathArg === '' || basePathArg === '/' ? '' : `/${basePathArg.replace(/^\/+|\/+$/g, '')}`;
 if (basePath && (!/^\/[A-Za-z0-9/_-]+$/.test(basePath) || basePath.slice(1).split('/').some((part) => part === '.' || part === '..' || part === ''))) {
@@ -15,6 +16,12 @@ if (basePath && (!/^\/[A-Za-z0-9/_-]+$/.test(basePath) || basePath.slice(1).spli
 
 if (path.dirname(outputRoot) !== backendRoot || path.basename(outputRoot) !== 'dist-lolipop') {
   throw new Error(`Refusing to clear an unexpected output directory: ${outputRoot}`);
+}
+let localConfig = null;
+try {
+  localConfig = await readFile(localConfigPath);
+} catch (error) {
+  if (error?.code !== 'ENOENT') throw error;
 }
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(outputRoot, { recursive: true });
@@ -33,6 +40,7 @@ for (const script of ['create_admin.php', 'generate_admin_sql.php', 'seed_catalo
 }
 await cp(path.join(projectRoot, 'database'), path.join(outputRoot, 'database'), { recursive: true, force: true });
 await cp(path.join(backendRoot, 'config.production.php.example'), path.join(privateRoot, 'config.local.php.example'));
+if (localConfig !== null) await writeFile(localConfigPath, localConfig, { mode: 0o600 });
 
 const schemaPath = path.join(outputRoot, 'database', 'schema.sql');
 const schema = await readFile(schemaPath, 'utf8');
@@ -59,8 +67,10 @@ async function rewritePhpIncludes(dir) {
 }
 await rewritePhpIncludes(apiRoot);
 
-await writeFile(path.join(privateRoot, '.htaccess'), `Options -Indexes\n<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Deny from all\n</IfModule>\n`);
-await writeFile(path.join(outputRoot, '.htaccess'), `Options -Indexes\n`);
-await writeFile(path.join(outputRoot, 'README-DEPLOY.txt'), `PC PARTS SHOP - Lolipop release\n\n1. Create a MySQL database in the Lolipop control panel.\n2. Copy _private/config.local.php.example to _private/config.local.php and enter the DB connection values. Keep SESSION_SECURE=true on HTTPS.\n3. Import database/schema.sql after selecting the created DB in phpMyAdmin.\n4. Upload every file and folder in this package to the configured path using FTPS.\n5. Check https://YOUR-DOMAIN${basePath}/api/health.php. It should report database=connected.\n6. With SSH, run _private/scripts/seed_catalog.php and create the admin using _private/scripts/create_admin.php. Without SSH, generate admin SQL on a trusted local XAMPP PHP install using the project README instructions, then execute it in phpMyAdmin.\n7. Sign in to the admin page and register real products.\n\nKeep _private/.htaccess in place. Do not put DB passwords or API keys in config.js.\nOnly deploy this package to a PHP-enabled hosting plan. XAMPP is for local development, not internet-facing production.\n`);
+const denyAll = `Options -Indexes\n<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Deny from all\n</IfModule>\n`;
+await writeFile(path.join(privateRoot, '.htaccess'), denyAll);
+await writeFile(path.join(outputRoot, 'database', '.htaccess'), denyAll);
+await writeFile(path.join(outputRoot, '.htaccess'), `Options -Indexes\n<Files "README-DEPLOY.txt">\n  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n  <IfModule !mod_authz_core.c>\n    Deny from all\n  </IfModule>\n</Files>\n`);
+await writeFile(path.join(outputRoot, 'README-DEPLOY.txt'), `PC PARTS SHOP - Lolipop release\n\n1. Create a MySQL database in the Lolipop control panel.\n2. Copy _private/config.local.php.example to _private/config.local.php and enter the DB connection values. Keep SESSION_SECURE=true on HTTPS.\n3. Import database/schema.sql after selecting the created DB in phpMyAdmin.\n4. Upload every file and folder in this package to the configured path using FTPS.\n5. Check https://YOUR-DOMAIN${basePath}/api/health.php. It should report database=connected.\n6. With SSH, run _private/scripts/seed_catalog.php and create the admin using _private/scripts/create_admin.php. Without SSH, generate admin SQL on a trusted local XAMPP PHP install using the project README instructions, then execute it in phpMyAdmin.\n7. Sign in to the admin page and register real products.\n\nKeep _private/.htaccess and database/.htaccess in place. Do not put DB passwords or API keys in config.js.\nOnly deploy this package to a PHP-enabled hosting plan. XAMPP is for local development, not internet-facing production.\n`);
 
 console.log(`Built Lolipop release package: ${outputRoot}`);

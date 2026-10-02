@@ -12,11 +12,140 @@ if ($answers['budgetText'] === '' || $answers['useCase'] === '' || $answers['gam
 }
 $apiKey = env_value('GEMINI_API_KEY');
 $model = env_value('GEMINI_MODEL');
-if (!$apiKey || !$model) json_response(['error' => 'GEMINI_API_KEYとGEMINI_MODELをPHPサーバーに設定してください。'], 503);
+if (!$apiKey || !$model) json_response(['error' => 'AI相談機能はまだ設定されていません。'], 503);
+if (!function_exists('curl_init')) json_response(['error' => 'AI相談サービスへの接続機能が利用できません。'], 503);
+
+function limit_ai_request(PDO $pdo, string $apiKey): void
+{
+    // REMOTE_ADDR is supplied by the web server; forwarded headers are client-controlled.
+    $remoteIp = $_SERVER['REMOTE_ADDR'] ?? '';
+    if (!is_string($remoteIp) || !filter_var($remoteIp, FILTER_VALIDATE_IP)) {
+        json_response(['error' => 'AI相談の利用制限を確認できません。'], 503);
+    }
+    $clientHash = hash_hmac('sha256', $remoteIp, $apiKey);
+    $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    $nowSql = $now->format('Y-m-d H:i:s');
+    $cutoff = $now->modify('-1 hour');
+    try {
+        $pdo->beginTransaction();
+        $insert = $pdo->prepare('INSERT IGNORE INTO ai_rate_limits (client_hash, window_started_at, request_count, updated_at) VALUES (?, ?, 0, ?)');
+        $insert->execute([$clientHash, $nowSql, $nowSql]);
+        $lookup = $pdo->prepare('SELECT window_started_at, request_count FROM ai_rate_limits WHERE client_hash = ? FOR UPDATE');
+        $lookup->execute([$clientHash]);
+        $row = $lookup->fetch();
+        if (!$row) throw new RuntimeException('AI rate limit row was not available.');
+        $windowStart = new DateTimeImmutable((string)$row['window_started_at'], new DateTimeZone('UTC'));
+        if ($windowStart <= $cutoff) {
+            $update = $pdo->prepare('UPDATE ai_rate_limits SET window_started_at = ?, request_count = 1, updated_at = ? WHERE client_hash = ?');
+            $update->execute([$nowSql, $nowSql, $clientHash]);
+        } else {
+            if ((int)$row['request_count'] >= 12) {
+                $pdo->rollBack();
+                json_response(['error' => 'AI相談は1時間に12回までです。しばらくしてからお試しください。'], 429);
+            }
+            $update = $pdo->prepare('UPDATE ai_rate_limits SET request_count = request_count + 1, updated_at = ? WHERE client_hash = ?');
+            $update->execute([$nowSql, $clientHash]);
+        }
+        if (random_int(1, 100) === 1) {
+            $cleanup = $pdo->prepare('DELETE FROM ai_rate_limits WHERE updated_at < ? LIMIT 1000');
+            $cleanup->execute([$now->modify('-7 days')->format('Y-m-d H:i:s')]);
+        }
+        $pdo->commit();
+    } catch (Throwable $error) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('AI rate limit check failed.');
+        json_response(['error' => 'AI相談の利用制限を確認できません。'], 503);
+    }
+}
+
+function ai_budget_yen(string $text): ?int
+{
+    $normalized = str_replace([',', '，'], '', mb_convert_kana($text, 'n', 'UTF-8'));
+    if (preg_match('/(\d+(?:\.\d+)?)\s*万/u', $normalized, $match)) return (int)round((float)$match[1] * 10000);
+    if (preg_match('/\b(\d{4,9})\s*円?\b/u', $normalized, $match)) return (int)$match[1];
+    return null;
+}
+
+function ai_catalog_candidates(array $products, array $answers): array
+{
+    $quotas = [
+        'CPU' => 24, 'GPU' => 24, 'マザーボード' => 24, 'SSD' => 18,
+        'メモリ' => 18, 'CPUクーラー' => 12, 'ファン' => 12,
+        'PCケース' => 18, 'PC電源' => 16, 'その他' => 12,
+    ];
+    $budgetWeights = [
+        'CPU' => 0.20, 'GPU' => 0.32, 'マザーボード' => 0.12, 'SSD' => 0.08,
+        'メモリ' => 0.08, 'CPUクーラー' => 0.06, 'ファン' => 0.03,
+        'PCケース' => 0.12, 'PC電源' => 0.10, 'その他' => 0.12,
+    ];
+    $request = implode(' ', $answers);
+    $budget = ai_budget_yen($answers['budgetText']);
+    $terms = [];
+    foreach (preg_split('/[\s、。，・\/]+/u', mb_strtolower($request), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $term) {
+        if (mb_strlen($term) >= 2 && mb_strlen($term) <= 30) $terms[$term] = true;
+    }
+    if (preg_match('/白|ホワイト|white/iu', $request)) foreach (['白', 'ホワイト', 'white'] as $term) $terms[$term] = true;
+    if (preg_match('/黒|ブラック|black/iu', $request)) foreach (['黒', 'ブラック', 'black'] as $term) $terms[$term] = true;
+    if (preg_match('/光|キラキラ|rgb|argb|led/iu', $request)) foreach (['rgb', 'argb', 'led'] as $term) $terms[$term] = true;
+
+    $groups = [];
+    foreach ($products as $product) $groups[$product['category']][] = $product;
+    $selected = [];
+    foreach ($groups as $category => $items) {
+        $quota = $quotas[$category] ?? 12;
+        usort($items, static fn(array $a, array $b): int => $a['price'] <=> $b['price'] ?: strcmp($a['id'], $b['id']));
+        if (count($items) <= $quota) {
+            array_push($selected, ...$items);
+            continue;
+        }
+        $chosen = [];
+        $add = static function (array $item) use (&$chosen, $quota): void {
+            if (count($chosen) < $quota) $chosen[$item['id']] = $item;
+        };
+
+        // Reserve half of each category for a spread of prices and generations.
+        $spreadCount = (int)ceil($quota / 2);
+        for ($i = 0; $i < $spreadCount; $i++) {
+            $index = (int)round($i * (count($items) - 1) / max(1, $spreadCount - 1));
+            $add($items[$index]);
+        }
+
+        $relevant = [];
+        foreach ($items as $item) {
+            $haystack = mb_strtolower($item['name'] . ' ' . $item['maker'] . ' ' . json_encode($item['specs'], JSON_UNESCAPED_UNICODE));
+            $score = 0;
+            foreach ($terms as $term => $_) if (mb_strpos($haystack, $term) !== false) $score++;
+            if ($score > 0) $relevant[] = ['item' => $item, 'score' => $score];
+        }
+        usort($relevant, static fn(array $a, array $b): int => $b['score'] <=> $a['score'] ?: $a['item']['price'] <=> $b['item']['price']);
+        $relevantLimit = (int)ceil($quota / 4);
+        for ($i = 0; $i < min($relevantLimit, count($relevant)); $i++) $add($relevant[$i]['item']);
+
+        if ($budget !== null) {
+            $targetPrice = max(1, $budget * ($budgetWeights[$category] ?? 0.1));
+            $nearBudget = $items;
+            usort($nearBudget, static fn(array $a, array $b): int => abs(log(max(1, $a['price']) / $targetPrice)) <=> abs(log(max(1, $b['price']) / $targetPrice)));
+            foreach ($nearBudget as $item) {
+                $add($item);
+                if (count($chosen) >= $quota) break;
+            }
+        }
+        // Fill gaps when relevance and budget do not use the entire quota.
+        for ($i = 0; $i < $quota * 3 && count($chosen) < $quota; $i++) {
+            $index = (int)round($i * (count($items) - 1) / max(1, $quota * 3 - 1));
+            $add($items[$index]);
+        }
+        array_push($selected, ...array_values($chosen));
+    }
+    return $selected;
+}
 
 $pdo = db();
-$catalogRows = $pdo->query('SELECT * FROM products WHERE is_active=TRUE AND stock > 0 ORDER BY category, name LIMIT 500')->fetchAll();
-$catalog = array_map('product_payload', $catalogRows);
+$catalogRows = $pdo->query('SELECT * FROM products WHERE is_active=TRUE AND is_demo_price=FALSE AND stock > 0 ORDER BY category, price, catalog_key LIMIT 5000')->fetchAll();
+$fullCatalog = array_map('product_payload', $catalogRows);
+if (!$fullCatalog) json_response(['error' => '購入可能な商品がまだありません。管理画面で販売価格と在庫を確認してください。'], 409);
+$catalog = ai_catalog_candidates($fullCatalog, $answers);
+limit_ai_request($pdo, $apiKey);
 
 // Rakuten data is returned only as external comparison context. It never becomes a catalog item or a cart ID.
 $references = [];
@@ -96,10 +225,18 @@ if (!is_array($proposal)) {
 $byKey = [];
 foreach ($catalog as $product) $byKey[$product['id']] = $product;
 $recommended = [];
-foreach (($proposal['recommendations'] ?? []) as $candidate) {
-    $key = (string)($candidate['id'] ?? '');
+$selectedCategories = [];
+$candidates = is_array($proposal['recommendations'] ?? null) ? $proposal['recommendations'] : [];
+foreach ($candidates as $candidate) {
+    if (!is_array($candidate)) continue;
+    $key = is_scalar($candidate['id'] ?? null) ? (string)$candidate['id'] : '';
     if (!isset($byKey[$key])) continue;
-    $recommended[] = $byKey[$key] + ['reason' => mb_substr((string)($candidate['reason'] ?? ''), 0, 300)];
+    $category = $byKey[$key]['category'];
+    if (isset($selectedCategories[$category])) continue;
+    $selectedCategories[$category] = true;
+    $reason = is_scalar($candidate['reason'] ?? null) ? (string)$candidate['reason'] : '';
+    $recommended[] = $byKey[$key] + ['reason' => mb_substr($reason, 0, 300)];
+    if (count($recommended) >= 10) break;
 }
 $selectedCpu = null;
 foreach ($recommended as $item) {
@@ -111,13 +248,13 @@ if ($selectedCpu !== null) {
     foreach ($recommended as $index => $item) {
         if ($item['category'] !== 'マザーボード') continue;
         $boardSocket = (string)($item['specs']['ソケット'] ?? '');
-        $compatible = $item['platform'] === $selectedCpu['platform'] && ($cpuSocket === '' || $cpuSocket === $boardSocket);
+        $compatible = $item['platform'] === $selectedCpu['platform'] && $cpuSocket !== '' && $cpuSocket === $boardSocket;
         if ($compatible) continue;
         $replacement = null;
-        foreach ($catalog as $candidateBoard) {
+        foreach ($fullCatalog as $candidateBoard) {
             if ($candidateBoard['category'] !== 'マザーボード' || $candidateBoard['platform'] !== $selectedCpu['platform']) continue;
             $candidateSocket = (string)($candidateBoard['specs']['ソケット'] ?? '');
-            if ($cpuSocket !== '' && $candidateSocket !== $cpuSocket) continue;
+            if ($cpuSocket === '' || $candidateSocket !== $cpuSocket) continue;
             $replacement = $candidateBoard;
             break;
         }
@@ -131,13 +268,13 @@ if ($selectedCpu !== null) {
     $recommended = array_values($recommended);
 }
 $total = array_sum(array_map(static fn(array $item): int => (int)$item['price'], $recommended));
-$summary = mb_substr((string)($proposal['summary'] ?? ''), 0, 1000);
+$summary = mb_substr(is_scalar($proposal['summary'] ?? null) ? (string)$proposal['summary'] : '', 0, 1000);
 if ($compatibilityNote !== '') $summary = trim($summary . ' ' . $compatibilityNote);
 json_response([
     'summary' => mb_substr($summary, 0, 1000),
-    'imagePrompt' => mb_substr((string)($proposal['imagePrompt'] ?? ''), 0, 1000),
+    'imagePrompt' => mb_substr(is_scalar($proposal['imagePrompt'] ?? null) ? (string)$proposal['imagePrompt'] : '', 0, 1000),
     'items' => $recommended,
     'totalPrice' => $total,
     'references' => $references,
-    'referenceNotes' => mb_substr((string)($proposal['referenceNotes'] ?? ''), 0, 1000),
+    'referenceNotes' => mb_substr(is_scalar($proposal['referenceNotes'] ?? null) ? (string)$proposal['referenceNotes'] : '', 0, 1000),
 ]);

@@ -7,7 +7,7 @@ function cors_headers(): void
 {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
     $allowed = array_values(array_filter(array_map('trim', explode(',', env_value('APP_ALLOWED_ORIGINS', 'http://localhost:8080,http://127.0.0.1:8080') ?? ''))));
-    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (int)($_SERVER['SERVER_PORT'] ?? 0) === 443;
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (int)($_SERVER['SERVER_PORT'] ?? 0) === 443 || filter_var(env_value('SESSION_SECURE', 'false'), FILTER_VALIDATE_BOOLEAN);
     $sameOrigin = ($_SERVER['HTTP_HOST'] ?? '') !== '' && $origin === ($isHttps ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'];
     if ($origin !== '' && !$sameOrigin && !in_array('*', $allowed, true) && !in_array($origin, $allowed, true)) {
         json_response(['error' => 'この接続元からのリクエストは許可されていません。'], 403);
@@ -67,6 +67,8 @@ function db(): PDO
 function start_app_session(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) return;
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (int)($_SERVER['SERVER_PORT'] ?? 0) === 443 || filter_var(env_value('SESSION_SECURE', 'false'), FILTER_VALIDATE_BOOLEAN);
     session_name('pcparts_admin');
     session_set_cookie_params([
@@ -79,10 +81,21 @@ function start_app_session(): void
     session_start();
 }
 
+function admin_authenticated(): bool
+{
+    header('Cache-Control: private, no-store');
+    start_app_session();
+    if (($_SESSION['role'] ?? null) !== 'admin' || !is_numeric($_SESSION['user_id'] ?? null)) return false;
+    $stmt = db()->prepare("SELECT 1 FROM users WHERE id = ? AND role = 'admin' LIMIT 1");
+    $stmt->execute([(int)$_SESSION['user_id']]);
+    if ($stmt->fetchColumn()) return true;
+    unset($_SESSION['role'], $_SESSION['user_id'], $_SESSION['admin_email']);
+    return false;
+}
+
 function require_admin(): void
 {
-    start_app_session();
-    if (($_SESSION['role'] ?? null) !== 'admin') {
+    if (!admin_authenticated()) {
         json_response(['error' => '管理者としてログインしてください。'], 401);
     }
 }
@@ -110,7 +123,15 @@ function product_payload(array $row): array
         'productUrl' => $row['product_url'] ?? '',
         'sourceName' => is_array($specs) ? (string)($specs['取得元'] ?? '') : '',
         'isDemoPrice' => (bool)$row['is_demo_price'],
+        'isActive' => (bool)$row['is_active'],
     ];
+}
+
+function require_publishable_product(array $item): void
+{
+    if ($item['price'] < 1 || $item['stock'] < 1 || $item['is_demo_price'] || !$item['image_url']) {
+        json_response(['error' => '公開するには自社の販売価格・在庫・商品画像を確認し、仮価格を解除してください。'], 422);
+    }
 }
 
 function clean_product(array $input): array

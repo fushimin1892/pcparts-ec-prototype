@@ -63,11 +63,11 @@ C:\xampp\php\php.exe C:\xampp\htdocs\pcparts\_private\scripts\create_admin.php a
 
 1. ロリポップのユーザー専用ページでMySQLデータベースを作成します。既存のサイトを置き換えないよう、公開ディレクトリ内の`pcparts`サブフォルダへ配置する例では`node backend/scripts/build_lolipop_release.mjs --base-path=/pcparts`を実行します。ドメイン直下に配置する場合は`node backend/scripts/build_lolipop_release.mjs`を実行します。
 2. `backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーし、ロリポップのDBホスト名・DB名・ユーザー名・パスワードを記入します。HTTPS公開なので`SESSION_SECURE`は`true`のままにします。必要ならGemini / 楽天のAPIキーもここへ入れます。
-3. `backend/dist-lolipop`の中身を、FTPSで配置先へアップロードします。サブフォルダ配置なら公開ディレクトリ内に`pcparts`を作り、その中へ入れます。ロリポップ公式マニュアルはFTPSとFTPアップロードを案内しています。[FTPS設定](https://lolipop.jp/manual/hp/ftp-set/)、[アップロード方法](https://lolipop.jp/manual/user/ftp2-04/)。`_private/.htaccess`も必ず一緒にアップロードしてください。
+3. `backend/dist-lolipop`の中身を、FTPSで配置先へアップロードします。サブフォルダ配置なら公開ディレクトリ内に`pcparts`を作り、その中へ入れます。ロリポップ公式マニュアルはFTPSとFTPアップロードを案内しています。[FTPS設定](https://lolipop.jp/manual/hp/ftp-set/)、[アップロード方法](https://lolipop.jp/manual/user/ftp2-04/)。`_private/.htaccess`と`database/.htaccess`も必ず一緒にアップロードしてください。パッケージを再生成しても既存の`_private/config.local.php`は保持されます。
 4. phpMyAdminで作成したDBを選択し、`database/schema.sql`をインポートします。SSHが使えるプランなら`_private/scripts/seed_catalog.php`で初期カタログを入れ、`ADMIN_PASSWORD`を設定して`_private/scripts/create_admin.php`を実行します。SSHがないプランではXAMPPのPHPで`backend/scripts/generate_admin_sql.php`から管理者登録SQLを生成して、phpMyAdminで実行できます。
-5. `https://あなたのドメイン/api/health.php`が`database: connected`を返すことを確認し、管理者画面へログインします。
+5. `https://あなたのドメイン/pcparts/api/health.php`が`database: connected`を返すことを確認し、管理者画面へログインします。
 
-DB接続情報やAPIキーは`_private/config.local.php`だけに置きます。公開画面の`config.js`へ書かないでください。ロリポップはPHP、MySQL、phpMyAdmin、FTPSを提供していますが、実際の公開には契約・ドメイン・アップロード権限とDB接続情報が必要です。この作業環境からはまだ確認できていません。ユーザー専用ページのFTP / DB情報はチャットへ貼らず、生成した`backend/dist-lolipop/_private/config.local.php`へ設定してください。
+DB接続情報やAPIキーは`_private/config.local.php`だけに置きます。公開画面の`config.js`へ書かないでください。ユーザー専用ページのFTP / DB情報はチャットへ貼らず、生成した`backend/dist-lolipop/_private/config.local.php`へ設定してください。
 
 ### Dockerで開発（任意）
 

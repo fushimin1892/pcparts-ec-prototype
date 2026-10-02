@@ -23,7 +23,8 @@ foreach ($items as $item) {
         'manufacturer_url' => $item['manufacturerUrl'] ?? null,
         'specs' => json_encode($item['specs'] ?? new stdClass(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         'is_demo_price' => !empty($item['isDemoPrice']) ? 1 : 0,
-        'stock' => $item['stock'] ?? 0,
+        // Bundled demo products do not represent physical stock on the host.
+        'stock' => !empty($item['isDemoPrice']) ? 0 : ($item['stock'] ?? 0),
         'description' => $item['description'] ?? '',
     ]);
 }

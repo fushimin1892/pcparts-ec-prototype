@@ -105,13 +105,23 @@ async function amazonSearch(keyword, page) {
 
 function categoryMatches(category, name) {
   const text = String(name || "");
-  if (/(中古|ジャンク|ノートPC|ノートパソコン|ゲーミングPC|完成品|自作PCセット)/i.test(text)) return false;
+  if (/(中古|ジャンク|ノートPC|ノートパソコン|ゲーミングPC|完成品|自作PCセット|空箱|展示品)/i.test(text)) return false;
+  const accessories = {
+    CPU: /(CPUクーラー|クーラー|ファン|グリス|ヒートシンク|ブラケット|マザーボード|ソケット保護|CPUスタンド)/i,
+    GPU: /(ウォーターブロック|グラボスタンド|GPUホルダー|グラボホルダー|GPUステー|グラボステー|バックプレート|グラボ用|マザーボード)/i,
+    マザーボード: /(マザーボード用|マザーボードスタンド|ソケットカバー|バックプレート|延長ケーブル)/i,
+    SSD: /(SSDケース|SSDエンクロージャ|SSD外付けケース|SSDヒートシンク|SSDスタンド|マザーボード|M\.2変換|M\.2アダプタ)/i,
+    メモリ: /(ノート用|SO.?DIMM|メモリカード|USBメモリ|メモリクーラー|マザーボード|メモリ対応)/i,
+    PCケース: /(PCケースファン|ケースファン|PCケース用|ケース用ファン|ケーススタンド)/i,
+    PC電源: /(電源ケーブル|電源延長|電源変換|電源アダプタ|電源ユニット用)/i,
+  };
+  if (accessories[category]?.test(text)) return false;
   const patterns = {
-    CPU: /(Ryzen|Core\s*(Ultra|i[3579])?|Xeon|Threadripper|CPU)/i,
+    CPU: /(Ryzen|Core\s*(Ultra|i[3579])|Xeon|Threadripper|Athlon)/i,
     GPU: /(GeForce|RTX\s*\d|GTX\s*\d|Radeon\s*RX|グラフィックボード|グラボ)/i,
     マザーボード: /(マザーボード|motherboard|LGA\d{4}|AM[45]\b|B[468]\d{2}|X[3568]\d{2}|Z[78]\d{2})/i,
     SSD: /(SSD|NVMe|M\.2|ソリッドステート)/i,
-    メモリ: /(DDR[345]|デスクトップ.*メモリ|PC.*メモリ)/i,
+    メモリ: /(DDR[345].*(メモリ|DIMM|RAM|\d+\s*GB)|(?:メモリ|DIMM|RAM).*DDR[345]|デスクトップ.*メモリ)/i,
     CPUクーラー: /(CPUクーラー|CPU cooler|簡易水冷|水冷クーラー|空冷クーラー)/i,
     ファン: /(ケースファン|PCファン|ケース.*ファン|120\s*mm.*ファン|140\s*mm.*ファン)/i,
     PCケース: /(PCケース|パソコンケース|ミドルタワー|フルタワー|mini.?ITXケース)/i,
@@ -120,16 +130,26 @@ function categoryMatches(category, name) {
   return patterns[category]?.test(text) || false;
 }
 
-function guessMaker(name, fallback = "") {
-  const known = ["AMD", "Intel", "NVIDIA", "ASUS", "MSI", "GIGABYTE", "ASRock", "ZOTAC", "Palit", "PNY", "SAPPHIRE", "玄人志向", "Corsair", "Kingston", "Crucial", "G.Skill", "Western Digital", "Samsung", "Seagate", "Solidigm", "KIOXIA", "NZXT", "Fractal Design", "Lian Li", "Thermalright", "Noctua", "DEEPCOOL", "Cooler Master", "Seasonic", "FSP", "Antec", "玄人志向"];
+function guessMaker(name, fallback = "", category = "") {
+  const boardMakers = ["ASUS", "MSI", "GIGABYTE", "ASRock", "ZOTAC", "Palit", "PNY", "SAPPHIRE", "玄人志向", "PowerColor", "XFX", "Inno3D", "Gainward"];
+  const known = category === "CPU" ? ["AMD", "Intel"] : [
+    ...boardMakers, "Corsair", "Kingston", "Crucial", "G.Skill", "Western Digital", "Samsung", "Seagate", "Solidigm", "KIOXIA", "NZXT", "Fractal Design", "Lian Li", "Thermalright", "Noctua", "DEEPCOOL", "Cooler Master", "Seasonic", "FSP", "Antec", "AMD", "Intel", "NVIDIA",
+  ];
   return known.find((maker) => new RegExp(maker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(name)) || fallback || "メーカー未特定";
 }
 
 function platformFor(category, name, maker) {
   if (category !== "CPU" && category !== "マザーボード") return "";
   const value = `${maker} ${name}`;
-  if (/(Intel|Core\s*(Ultra|i[3579])?|LGA\s*\d|B[67-8]\d{2}|Z[67-8]\d{2}|H[67-8]\d{2})/i.test(value)) return "Intel";
-  if (/(AMD|Ryzen|AM[245]\b|A[356]\d{2}|B[4568]\d{2}|X[3568]\d{2})/i.test(value)) return "AMD";
+  const intel = category === "CPU"
+    ? /\bIntel\b|\bCore\s*(?:Ultra|i[3579])|\bXeon\b/i.test(value)
+    : /\bIntel\b|\bLGA\s*\d{4}\b|\b(?:B360|B365|B460|B560|B660|B760|B860|H310|H370|H410|H470|H510|H570|H610|H670|H770|H810|H870|Z370|Z390|Z490|Z590|Z690|Z790|Z890|W680|W790)/i.test(value);
+  const amd = category === "CPU"
+    ? /\bAMD\b|\bRyzen\b|\bThreadripper\b|\bAthlon\b/i.test(value)
+    : /\bAMD\b|\bAM[245]\b|\b(?:A320|A520|A620|B350|B450|B550|B650|B850|X370|X470|X570|X670|X870|TRX40|TRX50)/i.test(value);
+  if (intel === amd) return "";
+  if (intel) return "Intel";
+  if (amd) return "AMD";
   return "";
 }
 
@@ -137,20 +157,23 @@ function asProduct(category, hit, market) {
   const amazonListing = market === "Amazon.co.jp" ? hit.offersV2?.listings?.[0] : null;
   const name = String(hit.name || hit.itemName || hit.itemInfo?.title?.displayValue || "").trim().replace(/\s+/g, " ");
   if (!name || !categoryMatches(category.name, name)) return null;
+  const rakutenImage = hit.mediumImageUrls?.[0] || hit.smallImageUrls?.[0] || "";
   const imageUrl = market === "Yahoo!ショッピング" ? hit.exImage?.url || hit.image?.medium || ""
-    : market === "楽天市場" ? hit.mediumImageUrls?.[0]?.imageUrl || hit.smallImageUrls?.[0]?.imageUrl || ""
+    : market === "楽天市場" ? (typeof rakutenImage === "string" ? rakutenImage : rakutenImage?.imageUrl || "")
       : hit.images?.primary?.large?.url || hit.images?.primary?.medium?.url || "";
   const productUrl = hit.url || hit.itemUrl || hit.detailPageURL || "";
   const price = Number(hit.price ?? hit.itemPrice ?? amazonListing?.price?.money?.amount);
   if (!imageUrl.startsWith("https://") || !productUrl.startsWith("https://") || !Number.isSafeInteger(price) || price <= 0) return null;
-  const maker = guessMaker(name, hit.brand?.name || hit.itemInfo?.byLineInfo?.brand?.displayValue || "");
+  let maker = guessMaker(name, hit.brand?.name || hit.itemInfo?.byLineInfo?.brand?.displayValue || "", category.name);
   const store = market === "Yahoo!ショッピング" ? hit.seller?.name : market === "楽天市場" ? hit.shopName : amazonListing?.merchantInfo?.name || "Amazon.co.jp";
   const sku = hit.code || hit.itemCode || hit.asin || "";
+  if (!sku) return null;
   const identifier = market === "Yahoo!ショッピング" ? `yahoo-${sku}` : market === "楽天市場" ? `rakuten-${sku}` : `amazon-${sku}`;
   const id = identifier.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").slice(0, 100);
   if (!id || results.has(id)) return null;
   const platform = platformFor(category.name, name, maker);
   if (["CPU", "マザーボード"].includes(category.name) && !platform) return null;
+  if (category.name === "CPU" && maker === "メーカー未特定") maker = platform;
   const description = market === "Yahoo!ショッピング" ? hit.description || hit.headLine || "" : market === "楽天市場" ? hit.itemCaption || hit.catchcopy || "" : (hit.itemInfo?.features?.displayValues || []).join(" / ");
   const available = market === "Yahoo!ショッピング" ? Boolean(hit.inStock) : market === "楽天市場" ? Number(hit.availability) === 1 : amazonListing?.availability?.type === "IN_STOCK";
   return {
@@ -159,7 +182,7 @@ function asProduct(category, hit, market) {
     reviews: Number(market === "Yahoo!ショッピング" ? hit.review?.count : hit.reviewCount) || 0,
     description: `${description.slice(0, 700)}${description ? "\n" : ""}外部ショップAPIから取得した参考情報です。取得時点の価格・在庫状況です。自社在庫と販売価格は管理画面で確認してください。`,
     specs: { "取得元": `${market}${store ? ` / ${store}` : ""}`, "販売元商品コード": sku, ...(hit.janCode ? { "JANコード": hit.janCode } : {}), "取得日時": new Date().toISOString(), "外部掲載在庫": available ? "API上で在庫あり" : "在庫なし" },
-    sourceName: `${market}${store ? ` / ${store}` : ""}`, imageUrl, productUrl, manufacturerUrl: "", isDemoPrice: true,
+    sourceName: `${market}${store ? ` / ${store}` : ""}`, imageUrl, productUrl, manufacturerUrl: "", isDemoPrice: true, isActive: false,
   };
 }
 

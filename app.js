@@ -32,7 +32,12 @@ let serverCatalogLoaded = false;
 let adminStatusChecked = false;
 let adminStatusChecking = false;
 let adminAuthenticated = false;
+let adminProducts = [];
+let adminCatalogLoaded = false;
+let adminCatalogLoading = false;
+let adminCatalogError = "";
 let serverAiProposal = null;
+let serverAiError = "";
 
 async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}/${path.replace(/^\/+/, "")}`, {
@@ -55,6 +60,7 @@ function normalizeApiProduct(product) {
     specs: product.specs && typeof product.specs === "object" ? product.specs : {},
     manufacturerUrl: String(product.manufacturerUrl || ""), imageUrl: String(product.imageUrl || ""), productUrl: String(product.productUrl || ""),
     sourceName: String(product.sourceName || product.specs?.["取得元"] || ""), isDemoPrice: Boolean(product.isDemoPrice),
+    isActive: product.isActive === undefined ? true : Boolean(product.isActive),
   };
 }
 
@@ -100,6 +106,39 @@ async function refreshServerCatalog() {
     serverCatalogLoaded = false;
     renderRoute();
     showToast(`商品APIに接続できません: ${error.message}`);
+  }
+}
+
+async function refreshAdminCatalog() {
+  if (!apiConfigured || !adminAuthenticated || adminCatalogLoading) return;
+  adminCatalogLoading = true;
+  adminCatalogError = "";
+  try {
+    const result = await apiRequest("products.php?include_inactive=1");
+    adminProducts = Array.isArray(result.items) ? result.items.map(normalizeApiProduct) : [];
+    adminCatalogLoaded = true;
+  } catch (error) {
+    adminCatalogLoaded = false;
+    adminCatalogError = error.message || "管理商品を読み込めませんでした";
+  } finally {
+    adminCatalogLoading = false;
+    if (routeInfo().page === "admin") renderAdmin();
+  }
+}
+
+async function refreshServerOrders() {
+  if (!apiConfigured || serverOrdersLoading) return;
+  serverOrdersLoading = true;
+  serverOrdersError = "";
+  try {
+    const result = await apiRequest("demo-orders.php");
+    orders = Array.isArray(result.orders) ? result.orders : [];
+  } catch (error) {
+    serverOrdersError = error.message || "デモ注文履歴を読み込めませんでした";
+  } finally {
+    serverOrdersLoaded = true;
+    serverOrdersLoading = false;
+    if (["account", "orders"].includes(routeInfo().page)) renderRoute();
   }
 }
 
@@ -191,11 +230,16 @@ let cart = storage.get("pcparts-cart", {});
 let favorites = storage.get("pcparts-favorites", []);
 let currentUser = storage.get("pcparts-user", null);
 let orders = storage.get("pcparts-orders", []);
+if (apiConfigured) orders = [];
+let serverOrdersLoaded = !apiConfigured;
+let serverOrdersLoading = false;
+let serverOrdersError = "";
 let catalogFilter = { category: "すべて", query: "", min: "", max: "", sort: "おすすめ順" };
 let catalogPage = 1;
 let adminQuery = "";
 let adminCategory = "すべて";
 let adminPlatform = "すべて";
+let adminListingStatus = "すべて";
 let adminPage = 1;
 let detailQuantity = 1;
 let wizardStep = 0;
@@ -389,6 +433,12 @@ function renderCart() {
   const subtotal = cartSubtotal();
   const shipping = subtotal === 0 || subtotal >= 11000 ? 0 : 660;
   app.innerHTML = `${breadcrumb("ショッピングカート", "")}<div class="page-heading"><div><span class="eyebrow">YOUR CART</span><h1>ショッピングカート</h1><p>カートに入れた商品を確認できます。</p></div><button class="text-link" data-go="home">← 買い物を続ける</button></div><div class="stepper"><div class="stepper__item is-active"><span class="stepper__number">1</span><span>カート</span></div><div class="stepper__item"><span class="stepper__number">2</span><span>確認</span></div><div class="stepper__item"><span class="stepper__number">3</span><span>完了</span></div></div>${entries.length ? `<div class="cart-layout"><section class="panel cart-list"><div class="panel-title" style="margin:0;padding:15px 0"><span>カートの商品</span><span class="badge badge--gray">${cartQuantity()} 点</span></div>${entries.map(({ product, quantity }) => `<article class="cart-row"><div class="cart-row__image">${artFor(product.type, product.shortName)}</div><div class="cart-row__info"><span class="product-category">${product.category}</span><strong><a href="#/detail/${product.id}">${product.name}</a></strong><span class="price">${yen(product.price)}</span></div><div class="cart-row__quantity"><div class="quantity-stepper"><button data-action="change-cart" data-id="${product.id}" data-delta="-1">−</button><span>${quantity}</span><button data-action="change-cart" data-id="${product.id}" data-delta="1">＋</button></div></div><button class="delete-button" data-action="remove-cart" data-id="${product.id}" aria-label="削除">×</button></article>`).join("")}</section><aside class="panel order-summary"><h2>ご注文金額</h2><div class="summary-line"><span>商品小計（${cartQuantity()}点）</span><strong>${yen(subtotal)}</strong></div><div class="summary-line"><span>送料</span><strong>${shipping ? yen(shipping) : "無料"}</strong></div><div class="summary-total"><span>合計（税込）</span><strong>${yen(subtotal + shipping)}</strong></div><button class="button button--wide" data-action="checkout">購入手続きに進む →</button><p class="delivery-banner">${subtotal < 11000 ? `あと ${yen(11000 - subtotal)} で送料無料です` : "送料無料対象のお買い物です"}</p><p class="summary-note">※ デモ画面のため、実際のお支払いは発生しません。</p></aside></div>` : `<div class="panel empty-state"><div class="empty-state__icon">▱</div><h2>カートは空です</h2><p>気になるパーツをカートに追加してみましょう。</p><button class="button" data-go="home">商品を探す</button></div>`}`;
+  if (!entries.length && apiConfigured && serverCatalogLoaded && !products.length) {
+    const heading = document.querySelector(".empty-state h2");
+    const note = document.querySelector(".empty-state p");
+    if (heading) heading.textContent = "現在公開中の商品はありません";
+    if (note) note.textContent = "商品が公開された後にカートへ追加できます。";
+  }
   syncHeader();
 }
 
@@ -415,6 +465,16 @@ function renderCheckout() {
       ? `<div class="payment-detail"><label class="form-field"><span>お支払い先のコンビニ</span><select class="select" id="konbini-store"><option>セブン‐イレブン</option><option>ファミリーマート</option><option>ローソン</option><option>ミニストップ</option></select></label><p class="payment-detail-note">注文確定後、デモ用の払込番号と期限を表示します。店頭での支払いはできません。</p></div>`
       : `<div class="payment-detail"><p class="payment-detail-note"><strong>${paymentChoices.find(([value]) => value === selectedPayment)?.[2] || "電子マネー"}のデモ決済</strong><br />外部アプリやアカウントには接続せず、この画面上で決済完了をシミュレーションします。</p></div>`;
   app.innerHTML = `${breadcrumb("購入確認", "ショッピングカート")}<div class="page-heading"><div><span class="eyebrow">CHECKOUT · PAYMENT DEMO</span><h1>ご注文内容の確認</h1><p>お届け先とお支払い方法を選択してください。</p></div></div>${renderStep(1)}<div class="checkout-grid"><div><section class="panel checkout-panel"><h2 class="panel-title"><span><span class="panel-title__number">1</span>お届け先</span><button class="text-link" data-go="profile">変更する</button></h2><div class="address-choice"><input type="radio" checked aria-label="この住所へ配送" /><div><strong>${safeText(currentUser?.name || "テストユーザー")}</strong>${safeText(currentUser?.address || "〒810-0001 福岡県福岡市中央区天神1-2-3")}</div></div></section><section class="panel checkout-panel"><h2 class="panel-title"><span><span class="panel-title__number">2</span>お支払い方法</span><span class="badge badge--blue">すべてデモ</span></h2><div class="payment-method-grid">${paymentChoices.map(([value, icon, label, description]) => `<label class="payment-method ${selectedPayment === value ? "is-selected" : ""}"><input type="radio" name="payment" value="${value}" ${selectedPayment === value ? "checked" : ""} /><span class="payment-method__icon" aria-hidden="true">${icon}</span><span class="payment-method__copy"><strong>${label}</strong><small>${description}</small></span></label>`).join("")}</div>${paymentDetails}</section><section class="panel checkout-panel"><h2 class="panel-title"><span><span class="panel-title__number">3</span>注文商品（${cartQuantity()}点）</span></h2>${entries.map(({ product, quantity }) => `<div class="order-preview-item"><span>${safeText(product.name)} × ${quantity}</span><strong>${yen(product.price * quantity)}</strong></div>`).join("")}</section></div><aside class="panel order-summary"><h2>ご注文金額</h2><div class="summary-line"><span>商品小計</span><strong>${yen(subtotal)}</strong></div><div class="summary-line"><span>送料</span><strong>${shipping ? yen(shipping) : "無料"}</strong></div><div class="summary-total"><span>合計（税込）</span><strong>${yen(subtotal + shipping)}</strong></div><button class="button button--wide" data-action="place-order">デモ注文を確定する</button><p class="summary-note">実際の決済・請求・店舗での支払いは発生しません。</p></aside></div>`;
+  if (apiConfigured) {
+    const intro = document.querySelector(".page-heading p");
+    if (intro) intro.textContent = "支払方法を選んでデモ注文を作成します。住所・カード情報はサーバーに送信しません。";
+    const addressHeading = document.querySelector(".checkout-panel .panel-title span");
+    if (addressHeading) addressHeading.lastChild.textContent = "配送先（デモ）";
+    document.querySelector('.address-choice input[type="radio"]')?.remove();
+    const address = document.querySelector(".address-choice > div");
+    if (address) address.innerHTML = "<strong>デモ注文</strong>この注文で住所は送信されず、商品の発送も行われません。";
+    document.querySelector(".checkout-panel .text-link")?.remove();
+  }
 }
 
 function renderSuccess() {
@@ -435,9 +495,18 @@ function renderAuth(mode = "login") {
   const register = mode === "register";
   const heading = admin ? "管理者ログイン" : register ? "会員登録" : "おかえりなさい";
   app.innerHTML = `${breadcrumb(heading, "")}<section class="auth-layout"><aside class="auth-aside"><div class="auth-aside__content"><a class="brand brand--footer" href="#/home"><span class="brand__mark"><svg viewBox="0 0 42 42"><path d="M21 2 39 12v18L21 40 3 30V12L21 2Z"/><path d="M3 12 21 22l18-10M21 22v18"/></svg></span><span class="brand__wordmark">PC PARTS <span>SHOP</span><small>BUILD YOUR NEXT PC</small></span></a><h1>${register ? "理想のPCづくりを、ここから。" : "パーツ選びを、もっと楽しく。"}</h1><p>${register ? "アカウントを作成して、お気に入りや購入履歴をまとめて管理しましょう。" : "アカウントにログインして、お買い物を続けましょう。"}</p></div><div class="auth-aside__bottom">YOUR NEXT BUILD STARTS HERE</div></aside><div class="auth-form-wrap"><span class="eyebrow">${admin ? "SHOP ADMIN" : register ? "CREATE ACCOUNT" : "MY ACCOUNT"}</span><h2>${heading}</h2><p>${admin ? "管理者画面のデモにログインしてください。" : register ? "必要な情報を入力してください。" : "アカウント情報を入力してください。"}</p><form id="auth-form" data-mode="${mode}">${register ? formField("ユーザー名", "name", "例）山田 太郎") : ""}${formField("メールアドレス", "email", "example@sample.com", "email")}${formField("パスワード", "password", "8文字以上", "password", "", "デモ用に任意の値を入力してください。")}${register ? formField("パスワード（確認）", "passwordConfirm", "もう一度入力", "password") : ""}${register ? `<label style="display:flex;gap:7px;align-items:center;margin:2px 0 15px;color:#6b7b91;font-size:10px"><input type="checkbox" name="terms" required />利用規約に同意する</label>` : ""}<button class="button button--wide" type="submit">${admin ? "ログイン" : register ? "アカウントを作成" : "ログイン"}</button></form>${!register && !admin ? `<div class="form-footer"><a href="#/register">新規会員登録</a><a href="#/register">パスワードをお忘れの方</a></div>` : ""}<div class="form-separator">または</div><button class="button button--outline button--wide" data-go="${register ? "auth" : "register"}">${register ? "ログインはこちら" : "新規会員登録はこちら"}</button>${admin ? `<button class="text-link" style="justify-content:center;margin-top:13px" data-go="home">ショップへ戻る</button>` : ""}</div></section>`;
+  if (admin && apiConfigured) {
+    const intro = document.querySelector(".auth-form-wrap > p");
+    if (intro) intro.textContent = "登録済みの管理者アカウントでログインしてください。";
+    const passwordHint = document.querySelector('#auth-form input[name="password"] + .form-hint');
+    if (passwordHint) passwordHint.textContent = "管理者パスワードを入力してください。";
+    document.querySelector(".form-separator")?.remove();
+    document.querySelector('.auth-form-wrap > button[data-go="register"]')?.remove();
+  }
 }
 
 function getSampleOrders() {
+  if (apiConfigured) return orders;
   return orders.length ? orders : [
     { number: "PC202609250001", date: "2026年9月25日", total: 72580, status: "発送準備中", items: [{ id: "gpu4060", quantity: 1 }, { id: "cpu7700", quantity: 1 }, { id: "ram32", quantity: 1 }] },
     { number: "PC202608120003", date: "2026年8月12日", total: 44800, status: "配送済み", items: [{ id: "cpu7700", quantity: 1 }] },
@@ -446,7 +515,7 @@ function getSampleOrders() {
 
 function orderCard(order) {
   const statusClass = order.status === "コンビニ支払い待ち（デモ）" ? "badge--warning" : order.status === "発送準備中" || order.status === "決済完了（デモ）" ? "badge--blue" : "";
-  return `<article class="order-card"><div class="order-card__top"><div><strong>${safeText(order.date)}　注文番号：${safeText(order.number)}</strong><small>${order.paymentLabel ? `お支払い：${safeText(order.paymentLabel)}` : "ご注文内容を確認できます。"}</small></div><span class="badge ${statusClass}">${safeText(order.status)}</span></div><div class="order-card__products">${order.items.map((item) => { const product = findProduct(item.id); return product ? artFor(product.type, product.shortName) : ""; }).join("")}</div><div class="order-card__bottom"><span>合計金額 <strong>${yen(order.total)}</strong></span><button class="text-link" data-action="order-detail" data-id="${safeText(order.number)}">詳細を見る →</button></div></article>`;
+  return `<article class="order-card"><div class="order-card__top"><div><strong>${safeText(order.date)}　注文番号：${safeText(order.number)}</strong><small>${order.paymentLabel ? `お支払い：${safeText(order.paymentLabel)}` : "ご注文内容を確認できます。"}</small></div><span class="badge ${statusClass}">${safeText(order.status)}</span></div><div class="order-card__products">${order.items.map((item) => { const product = findProduct(item.id); return product ? artFor(product.type, product.shortName) : `<span class="order-item-name">${safeText(item.name || item.id)}</span>`; }).join("")}</div><div class="order-card__bottom"><span>合計金額 <strong>${yen(order.total)}</strong></span><button class="text-link" data-action="order-detail" data-id="${safeText(order.number)}">詳細を見る →</button></div></article>`;
 }
 
 function accountSidebar(active = "account") {
@@ -460,7 +529,7 @@ function renderAccount() {
 }
 
 function renderOrders() {
-  app.innerHTML = `${breadcrumb("購入履歴", "マイページ")}<div class="page-heading"><div><span class="eyebrow">ORDER HISTORY</span><h1>購入履歴</h1><p>過去のご注文内容を確認できます。</p></div></div><div class="account-layout">${accountSidebar("orders")}<section class="panel account-content"><h2>注文一覧</h2>${getSampleOrders().map(orderCard).join("")}</section></div>`;
+  app.innerHTML = `${breadcrumb("購入履歴", "マイページ")}<div class="page-heading"><div><span class="eyebrow">ORDER HISTORY</span><h1>購入履歴</h1><p>${apiConfigured ? "このブラウザで作成したデモ注文を確認できます。" : "過去のご注文内容を確認できます。"}</p></div></div><div class="account-layout">${accountSidebar("orders")}<section class="panel account-content"><h2>注文一覧</h2>${apiConfigured && !serverOrdersLoaded ? "<p>注文履歴を読み込み中です。</p>" : serverOrdersError ? `<p>${safeText(serverOrdersError)} <button class="text-link" data-action="orders-refresh">再読み込み</button></p>` : getSampleOrders().length ? getSampleOrders().map(orderCard).join("") : "<p>デモ注文はまだありません。</p>"}</section></div>`;
 }
 
 function renderProfile() {
@@ -471,6 +540,17 @@ function renderProfile() {
 function renderFavorites() {
   const selected = favorites.map(findProduct).filter(Boolean);
   app.innerHTML = `${breadcrumb("お気に入り", "")}<div class="page-heading"><div><span class="eyebrow">SAVED PARTS</span><h1>お気に入り</h1><p>気になるパーツをまとめて比較できます。</p></div><button class="text-link" data-go="home">商品を探す →</button></div>${selected.length ? `<div class="favorites-grid">${selected.map((product) => productCard(product, true)).join("")}</div>` : `<div class="panel empty-state"><div class="empty-state__icon">♡</div><h2>お気に入りはまだありません</h2><p>商品ページのハートを押すと、ここに保存されます。</p><button class="button" data-go="home">商品を探す</button></div>`}`;
+}
+
+function adminFilteredProducts() {
+  const source = apiConfigured ? adminProducts : products;
+  const query = adminQuery.trim().toLowerCase();
+  return source.filter((product) =>
+    (adminCategory === "すべて" || product.category === adminCategory) &&
+    (adminPlatform === "すべて" || product.platform === adminPlatform) &&
+    (adminListingStatus === "すべて" || (adminListingStatus === "公開中") === (product.isActive !== false)) &&
+    (!query || `${product.name} ${product.maker} ${product.platform || ""} ${product.category}`.toLowerCase().includes(query))
+  );
 }
 
 function renderAdminContent() {
@@ -486,8 +566,14 @@ function renderAdminContent() {
     return;
   }
   if (apiConfigured && !adminAuthenticated) { go("admin-login"); return; }
-  const query = adminQuery.trim().toLowerCase();
-  const allShown = products.filter((product) => (adminCategory === "すべて" || product.category === adminCategory) && (adminPlatform === "すべて" || product.platform === adminPlatform) && (!query || `${product.name} ${product.maker} ${product.platform || ""} ${product.category}`.toLowerCase().includes(query)));
+  if (apiConfigured && !adminCatalogLoaded) {
+    if (!adminCatalogLoading && !adminCatalogError) refreshAdminCatalog();
+    app.innerHTML = adminCatalogError
+      ? `<div class="panel empty-state"><h2>管理商品を読み込めませんでした</h2><p>${safeText(adminCatalogError)}</p><button class="button" data-action="admin-refresh">再読み込み</button></div>`
+      : `<div class="panel empty-state"><h2>管理商品を読み込み中</h2><p>下書きと公開中の商品を確認しています。</p></div>`;
+    return;
+  }
+  const allShown = adminFilteredProducts();
   const pageSize = 50; const pageCount = Math.max(1, Math.ceil(allShown.length / pageSize)); adminPage = Math.min(adminPage, pageCount);
   const shown = allShown.slice((adminPage - 1) * pageSize, adminPage * pageSize);
   app.innerHTML = `${breadcrumb("商品管理", "管理者ページ")}<div class="page-heading"><div><span class="eyebrow">SHOP MANAGEMENT</span><h1>商品管理</h1><p>登録した商品は商品一覧とカートに表示されます。</p></div></div><div class="admin-toolbar"><div class="admin-toolbar__copy"><strong>登録商品一覧</strong><small>${allShown.length} 件を表示（全 ${products.length} 件） / ${apiConfigured ? "MySQLカタログに保存" : "このブラウザに保存"}</small></div><div class="admin-toolbar-actions"><button class="button" data-action="admin-add">＋ 商品を登録</button><button class="button button--outline" data-action="admin-import">JSON一括登録</button><button class="button button--outline" data-action="admin-logout">ログアウト</button></div></div><form id="admin-filter-form" class="filter-controls admin-filter"><input class="field" name="query" type="search" placeholder="商品名・メーカーで検索" value="${safeText(adminQuery)}"><select class="select" name="category"><option ${adminCategory === "すべて" ? "selected" : ""}>すべて</option>${categoryItems.map(([name]) => `<option ${adminCategory === name ? "selected" : ""}>${safeText(name)}</option>`).join("")}</select><button class="button button--outline" type="submit">検索</button></form><div class="table-wrap"><table class="data-table"><thead><tr><th>商品情報</th><th>カテゴリ</th><th>価格</th><th>在庫数</th><th>操作</th></tr></thead><tbody>${shown.map((product) => `<tr><td><div class="table-product">${productImage(product)}<span><strong>${safeText(product.name)}</strong><small>${safeText(product.maker)}${product.isDemoPrice ? " ・仮価格" : ""}</small></span></div></td><td>${safeText(product.category)}</td><td>${yen(product.price)}</td><td>${Number(product.stock) || 0}</td><td><div class="table-actions"><button class="button button--outline" data-action="admin-edit" data-id="${safeText(product.id)}">編集</button><button class="button button--danger" data-action="admin-delete" data-id="${safeText(product.id)}">削除</button></div></td></tr>`).join("") || `<tr><td colspan="5">条件に合う商品がありません。</td></tr>`}</tbody></table></div>${pageCount > 1 ? `<nav class="catalog-pagination" aria-label="管理画面のページ移動"><button class="button button--outline" data-action="admin-page" data-page="${adminPage - 1}" ${adminPage === 1 ? "disabled" : ""}>← 前へ</button><span>${adminPage} / ${pageCount} ページ</span><button class="button button--outline" data-action="admin-page" data-page="${adminPage + 1}" ${adminPage === pageCount ? "disabled" : ""}>次へ →</button></nav>` : ""}`;
@@ -505,14 +591,26 @@ function enhanceAdminScreen() {
   platformFilter.value = adminPlatform;
   filter.querySelector("button[type='submit']")?.before(platformFilter);
 
+  if (apiConfigured) {
+    const statusFilter = document.createElement("select");
+    statusFilter.className = "select";
+    statusFilter.name = "listingStatus";
+    statusFilter.setAttribute("aria-label", "公開状態");
+    statusFilter.innerHTML = '<option value="すべて">公開状態すべて</option><option value="下書き">下書き</option><option value="公開中">公開中</option>';
+    statusFilter.value = adminListingStatus;
+    filter.querySelector("button[type='submit']")?.before(statusFilter);
+  }
+
   const header = table.tHead?.rows[0];
   if (header) {
     const platformHeader = document.createElement("th");
     platformHeader.textContent = "プラットフォーム";
     header.cells[1]?.after(platformHeader);
+    const statusHeader = document.createElement("th");
+    statusHeader.textContent = "公開状態";
+    header.lastElementChild?.before(statusHeader);
   }
-  const query = adminQuery.trim().toLowerCase();
-  const allShown = products.filter((product) => (adminCategory === "すべて" || product.category === adminCategory) && (adminPlatform === "すべて" || product.platform === adminPlatform) && (!query || `${product.name} ${product.maker} ${product.platform || ""} ${product.category}`.toLowerCase().includes(query)));
+  const allShown = adminFilteredProducts();
   const shown = allShown.slice((adminPage - 1) * 50, adminPage * 50);
   const rows = table.tBodies[0]?.rows || [];
   if (shown.length) {
@@ -523,10 +621,27 @@ function enhanceAdminScreen() {
         platformCell.textContent = `${product.platform || "未設定"}${socket ? ` · ${socket}` : ""}`;
       } else platformCell.textContent = "—";
       rows[index]?.cells[1]?.after(platformCell);
+      const statusCell = document.createElement("td");
+      statusCell.innerHTML = product.isActive === false
+        ? '<span class="badge badge--warning">下書き</span>'
+        : '<span class="badge badge--blue">公開中</span>';
+      rows[index]?.lastElementChild?.before(statusCell);
+      const editButton = rows[index]?.querySelector('[data-action="admin-edit"]');
+      const deleteButton = rows[index]?.querySelector('[data-action="admin-delete"]');
+      if (product.isActive === false) {
+        if (editButton) editButton.textContent = "販売設定";
+        if (deleteButton) deleteButton.textContent = "削除";
+      } else if (deleteButton) deleteButton.textContent = "公開停止";
     });
-  } else if (rows[0]?.cells[0]) rows[0].cells[0].colSpan = 6;
+  } else if (rows[0]?.cells[0]) rows[0].cells[0].colSpan = 7;
   const description = document.querySelector(".page-heading p");
-  if (description) description.textContent = "CPUとマザーボードはIntel / AMD別に管理できます。ソケットの違いも仕様欄で確認してください。";
+  if (description) description.textContent = "下書きは商品一覧に表示されません。価格・在庫・画像を確認して公開してください。CPUとマザーボードはIntel / AMDとソケットを確認します。";
+  const total = apiConfigured ? adminProducts.length : products.length;
+  const active = (apiConfigured ? adminProducts : products).filter((product) => product.isActive !== false).length;
+  const count = document.querySelector(".admin-toolbar__copy small");
+  if (count) count.textContent = `${allShown.length} 件を表示（全 ${total} 件・公開中 ${active} 件・下書き ${total - active} 件） / ${apiConfigured ? "MySQLカタログ" : "このブラウザ"}に保存`;
+  const importButton = document.querySelector('[data-action="admin-import"]');
+  if (importButton) importButton.textContent = "外部商品候補を取り込む";
 }
 
 function renderAdmin() {
@@ -558,13 +673,14 @@ function adminProductForm(product = null) {
     <label class="form-field"><span>情報取得元・ショップ名</span><input class="input" name="sourceName" maxlength="100" value="${safeText(values.sourceName || "")}" placeholder="例）ツクモ"></label>
     <label class="form-field"><span>メーカー公式情報URL</span><input class="input" name="manufacturerUrl" type="url" maxlength="1000" value="${safeText(values.manufacturerUrl || "")}" placeholder="https://"></label>
     <label class="form-check form-field--full"><input name="demoPrice" type="checkbox" ${values.isDemoPrice ? "checked" : ""}><span>試作用・外部API取得時点の仮価格として表示する</span></label>
-    </div><p class="form-hint">登録した商品のみ購入候補になります。${apiConfigured ? "MySQLへ保存します。" : "登録内容はこのブラウザ内に保存されます。"}</p><div class="modal-form-actions"><button class="button button--outline" type="button" data-action="close-modal">キャンセル</button><button class="button" type="submit">${editing ? "変更を保存" : "商品を登録"}</button></div></form>`);
+    ${apiConfigured ? `<label class="form-check form-field--full"><input name="active" type="checkbox" ${values.isActive === true ? "checked" : ""}><span>購入可能な商品として公開する</span></label>` : ""}
+    </div><p class="form-hint">${apiConfigured ? "下書きは商品一覧に表示されません。公開する前に、自社の販売価格・在庫・画像を確認し、仮価格のチェックを外してください。" : "登録内容はこのブラウザ内に保存されます。"}</p><div class="modal-form-actions"><button class="button button--outline" type="button" data-action="close-modal">キャンセル</button><button class="button" type="submit">${editing ? "変更を保存" : "商品を登録"}</button></div></form>`);
 }
 
 let pendingCatalogImport = [];
 function adminImportForm() {
   pendingCatalogImport = [];
-  openModal("商品データを一括登録", `<div class="admin-import"><p>公式ショッピングAPIから出力したJSONファイルを選択します。最大1,000件。画像URLと販売元の商品ページはAPI提供元のURLを保持します。</p><label class="form-field"><span>カタログJSON</span><input id="catalog-import-file" class="input" type="file" accept=".json,application/json"></label><div id="catalog-import-preview" class="import-preview" aria-live="polite">JSONファイルを選ぶと登録内容を確認できます。</div><div class="modal-form-actions"><button class="button button--outline" type="button" data-action="close-modal">キャンセル</button><button id="catalog-import-confirm" class="button" type="button" data-action="admin-import-confirm" disabled>商品を登録</button></div></div>`);
+  openModal("外部商品候補を取り込む", `<div class="admin-import"><p>公式ショッピングAPIから出力したJSONファイルを選択します。最大1,000件。価格と在庫は取得時点の参考情報です。MySQLでは下書きとして取り込み、管理画面で販売条件を確認してから公開します。</p><label class="form-field"><span>カタログJSON</span><input id="catalog-import-file" class="input" type="file" accept=".json,application/json"></label><div id="catalog-import-preview" class="import-preview" aria-live="polite">JSONファイルを選ぶと候補を確認できます。</div><div class="modal-form-actions"><button class="button button--outline" type="button" data-action="close-modal">キャンセル</button><button id="catalog-import-confirm" class="button" type="button" data-action="admin-import-confirm" disabled>下書きとして取り込む</button></div></div>`);
 }
 
 function validateImportedCatalog(payload) {
@@ -584,15 +700,22 @@ function validateImportedCatalog(payload) {
     if (raw.productUrl && !httpUrl(raw.productUrl)) throw new Error(`${index + 1}件目の販売ページURLはhttpまたはhttpsを指定してください。`);
     product.imageUrl = httpUrl(raw.imageUrl);
     product.productUrl = httpUrl(raw.productUrl);
+    if (apiConfigured && (product.price <= 0 || !product.imageUrl || !product.productUrl)) throw new Error(`${index + 1}件目は取得価格・商品画像URL・販売ページURLが必要です。`);
     return product;
   });
 }
 
-async function importCatalog(items) {
+async function importCatalog(items, onProgress = () => {}) {
   if (apiConfigured) {
-    const result = await apiRequest("admin/products/bulk-import.php", { method: "POST", body: JSON.stringify({ items }) });
-    await refreshServerCatalog();
-    return result.imported;
+    let imported = 0;
+    for (let offset = 0; offset < items.length; offset += 50) {
+      const result = await apiRequest("admin/products/bulk-import.php", { method: "POST", body: JSON.stringify({ items: items.slice(offset, offset + 50) }) });
+      imported += Number(result.imported) || 0;
+      onProgress(Math.min(offset + 50, items.length), items.length);
+    }
+    adminCatalogLoaded = false;
+    await refreshAdminCatalog();
+    return imported;
   }
   const byId = new Map(products.map((product) => [product.id, product]));
   for (const item of items) byId.set(item.id, item);
@@ -619,9 +742,19 @@ function renderWizard() {
   const question = wizardQuestions[wizardStep];
   const previous = wizardQuestions.slice(0, wizardStep).map((item) => `<div class="chat-line chat-line--user"><span>${safeText(wizardAnswers[item.key] || "（入力なし）")}</span></div><div class="chat-line chat-line--bot"><span>${item.prompt.replace(/[？?]$/, "。")}</span></div>`).join("");
   app.innerHTML = `${breadcrumb("AI構成相談", "")}<div class="page-heading"><div><span class="eyebrow">PC BUILD ASSISTANT</span><h1>AIとPC構成を相談</h1><p>希望や条件を自由に入力すると、内容に合わせた構成案を提案します。</p></div><button class="text-link" data-go="home">← 商品一覧へ</button></div><div class="wizard-layout"><section class="panel wizard-panel"><div class="wizard-panel__head"><span class="wizard-bot-icon">✳</span><div><strong>PC構成AIアシスタント</strong><small>選択肢にない希望も、そのまま入力できます</small></div><span class="wizard-step-label">${wizardStep + 1} / ${wizardQuestions.length}</span></div><div class="wizard-progress"><span style="width:${((wizardStep + 1) / wizardQuestions.length) * 100}%"></span></div><div class="chat-history"><div class="chat-line chat-line--bot"><span>こんにちは！用途や条件に決まった選択肢はありません。思いつくことを自由に教えてください。</span></div>${previous}<div class="chat-line chat-line--bot"><span>${question.prompt}<small>${question.detail}</small></span></div></div><form id="wizard-form" class="wizard-answer">${renderWizardAnswerControl(question)}<div class="wizard-actions">${wizardStep > 0 ? `<button class="button button--quiet" type="button" data-action="wizard-back">← 前の質問</button>` : `<span class="wizard-note">回答はこのブラウザ内だけで保持されます</span>`}<button class="button" type="submit">${wizardStep === wizardQuestions.length - 1 ? "構成を提案してもらう →" : "次の質問へ →"}</button></div></form></section><aside class="wizard-aside panel"><span class="eyebrow">HOW IT WORKS</span><h2>あなたの希望を、<br />パーツ構成に。</h2><p>用途、ゲームやアプリ、見た目、手持ち機材などを自由入力できます。</p><ol>${wizardQuestions.map((item, index) => `<li class="${index <= wizardStep ? "is-active" : ""}"><span>${index + 1}</span>${item.label.replace(/（任意）/, "")}</li>`).join("")}</ol><div class="wizard-aside__tip">✦ 試作版では回答に応じたサンプル商品で構成します。</div></aside></div>`;
+  if (apiConfigured) {
+    const note = document.querySelector(".wizard-note");
+    if (note) note.textContent = "回答は構成提案のためAI APIへ送信されます";
+    const tip = document.querySelector(".wizard-aside__tip");
+    if (tip) tip.textContent = "✦ 公開中の自社商品から構成を提案します。";
+  }
 }
 
 function recommendationProducts() {
+  if (apiConfigured) {
+    if (!Array.isArray(serverAiProposal?.items)) return [];
+    return serverAiProposal.items.map((item) => findProduct(item.id)).filter((product) => product && product.price > 0 && product.stock > 0);
+  }
   if (serverAiProposal && Array.isArray(serverAiProposal.items)) {
     return serverAiProposal.items.map((item) => findProduct(item.id)).filter(Boolean);
   }
@@ -653,6 +786,13 @@ function pcSceneSvg() {
 
 function renderAiResult() {
   const selection = recommendationProducts();
+  if (apiConfigured && !selection.length) {
+    const message = serverAiError
+      ? `AI相談を利用できませんでした。${serverAiError}`
+      : "現在の自社カタログに、条件に合う購入可能な商品がありません。商品が公開された後に再相談できます。";
+    app.innerHTML = `${breadcrumb("AI構成相談", "")}<div class="page-heading"><div><span class="eyebrow">PC BUILD ASSISTANT</span><h1>構成を提案できませんでした</h1><p>入力した条件はこの画面で再入力できます。</p></div></div><section class="panel empty-state"><div class="wizard-bot-icon">✳</div><h2>購入可能な構成が見つかりません</h2><p>${safeText(message)}</p><div class="success-actions"><button class="button" data-action="restart-wizard">条件を変えて再相談</button><button class="button button--outline" data-go="home">販売中の商品を見る</button></div></section>`;
+    return;
+  }
   const total = selection.reduce((sum, product) => sum + product.price, 0);
   const budget = parseBudget(wizardAnswers.budget) || 200000;
   const budgetLabel = wizardAnswers.budget || "未指定（約20万円で試算）";
@@ -700,6 +840,7 @@ function renderAiResult() {
 
 function renderRoute() {
   const { page, id } = routeInfo();
+  if (apiConfigured && ["account", "orders"].includes(page) && !serverOrdersLoaded && !serverOrdersLoading) refreshServerOrders();
   if (page === "home") renderHome();
   else if (page === "detail") renderDetail(decodeURIComponent(id));
   else if (page === "cart") renderCart();
@@ -740,7 +881,7 @@ function enhanceAdminProductForm() {
     field.id = "product-platform-field";
     field.innerHTML = `<span>プラットフォーム *</span><select class="select" name="platform"><option value="">選択してください</option>${platformOptions.map((value) => `<option value="${value}">${value}</option>`).join("")}</select><small class="form-hint">CPUソケット / マザーボードの対応メーカーを選びます。</small>`;
     categoryLabel.after(field);
-    const savedProduct = findProduct(form.dataset.id);
+    const savedProduct = (apiConfigured ? adminProducts : products).find((product) => product.id === form.dataset.id);
     if (savedProduct?.platform) field.querySelector("select").value = savedProduct.platform;
   }
   const platformSelect = field.querySelector("select");
@@ -782,46 +923,56 @@ function productFormValues(form) {
   const imageUrl = String(data.get("imageUrl") || "").trim();
   const productUrl = String(data.get("productUrl") || "").trim();
   const sourceName = String(data.get("sourceName") || "").trim();
+  const existing = (apiConfigured ? adminProducts : products).find((item) => item.id === form.dataset.id);
+  const isActive = apiConfigured ? data.has("active") : true;
+  const isDemoPrice = data.has("demoPrice");
   for (const [label, url] of [["メーカー情報URL", manufacturerUrl], ["商品画像URL", imageUrl], ["販売元URL", productUrl]]) {
     if (url && !safeHttpUrl(url)) throw new Error(`${label}はhttpまたはhttpsのURLを入力してください`);
   }
   if (sourceName) specs["取得元"] = sourceName;
+  if (apiConfigured && isActive && existing?.isActive !== true) {
+    if (price <= 0 || stock <= 0 || isDemoPrice || !imageUrl) throw new Error("公開には自社の販売価格・在庫・商品画像が必要です。仮価格のチェックも外してください");
+  }
   return {
     id: form.dataset.id || `catalog-${Date.now().toString(36)}`, name,
     shortName: String(data.get("shortName") || "").trim() || name,
-    maker: String(data.get("maker") || "").trim() || "メーカー未設定", platform, category, type: category === "その他" ? (findProduct(form.dataset.id)?.type || "other") : (typeByCategory[category] || "other"),
+    maker: String(data.get("maker") || "").trim() || "メーカー未設定", platform, category, type: category === "その他" ? (existing?.type || "other") : (typeByCategory[category] || "other"),
     price, stock, rating: 0, reviews: 0, description: String(data.get("description") || "").trim() || "商品説明は準備中です。",
-    specs, manufacturerUrl, imageUrl, productUrl, sourceName, isDemoPrice: data.has("demoPrice"),
+    specs, manufacturerUrl, imageUrl, productUrl, sourceName, isDemoPrice, isActive,
   };
 }
 
 async function submitAdminProduct(form) {
   try {
     const product = productFormValues(form);
-    const existing = findProduct(product.id);
+    const existing = (apiConfigured ? adminProducts : products).find((item) => item.id === product.id);
     if (apiConfigured) {
       const path = `products.php${existing ? `?id=${encodeURIComponent(product.id)}` : ""}`;
       const result = await apiRequest(path, { method: existing ? "PUT" : "POST", body: JSON.stringify(product) });
       Object.assign(product, normalizeApiProduct(result.item));
     }
-    const index = products.findIndex((item) => item.id === product.id);
-    if (index >= 0) products[index] = product; else products.unshift(product);
-    if (!apiConfigured) persistCatalog();
-    document.querySelector("#modal-root").innerHTML = ""; renderAdmin(); showToast(existing ? "商品情報を更新しました" : "商品を登録しました");
+    const target = apiConfigured ? adminProducts : products;
+    const index = target.findIndex((item) => item.id === product.id);
+    if (index >= 0) target[index] = product; else target.unshift(product);
+    if (apiConfigured && !product.isActive) { delete cart[product.id]; persistCart(); }
+    if (apiConfigured) await refreshServerCatalog(); else persistCatalog();
+    document.querySelector("#modal-root").innerHTML = ""; renderAdmin(); showToast(product.isActive ? "公開商品を保存しました" : "下書きを保存しました");
   } catch (error) { showToast(error.message || "商品の保存に失敗しました"); }
 }
 
 async function deleteAdminProduct(id) {
   try {
-    if (apiConfigured) await apiRequest(`products.php?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    const index = products.findIndex((product) => product.id === id);
+    const result = apiConfigured ? await apiRequest(`products.php?id=${encodeURIComponent(id)}`, { method: "DELETE" }) : null;
+    const target = apiConfigured ? adminProducts : products;
+    const index = target.findIndex((product) => product.id === id);
     if (index < 0) return;
-    const product = products[index]; products.splice(index, 1);
+    const product = target[index];
+    if (apiConfigured && result?.archived) product.isActive = false; else target.splice(index, 1);
     cart = Object.fromEntries(Object.entries(cart).filter(([productId]) => productId !== id));
     favorites = favorites.filter((productId) => productId !== id);
-    if (!apiConfigured) persistCatalog();
+    if (apiConfigured) await refreshServerCatalog(); else persistCatalog();
     persistCart(); storage.set("pcparts-favorites", favorites);
-    document.querySelector("#modal-root").innerHTML = ""; renderAdmin(); showToast(`${product.name} を削除しました`);
+    document.querySelector("#modal-root").innerHTML = ""; renderAdmin(); showToast(result?.archived ? `${product.name} を非公開にしました` : `${product.name} を削除しました`);
   } catch (error) { showToast(error.message || "商品の削除に失敗しました"); }
 }
 
@@ -831,8 +982,62 @@ async function signInAdmin(form) {
     const result = await apiRequest("admin/login.php", { method: "POST", body: JSON.stringify({ email: data.get("email"), password: data.get("password") }) });
     adminAuthenticated = true; adminStatusChecked = true;
     await refreshServerCatalog();
+    await refreshAdminCatalog();
     go("admin"); showToast(`${result.admin?.name || "管理者"} としてログインしました`);
   } catch (error) { showToast(error.message || "管理者ログインに失敗しました"); }
+}
+
+async function placeDemoOrder(button) {
+  const paymentMethod = document.querySelector('input[name="payment"]:checked')?.value || "card";
+  const paymentLabels = { card: "クレジット / デビットカード（デモ）", paypay: "PayPay（デモ）", rakutenpay: "楽天ペイ（デモ）", transport: "交通系電子マネー（デモ）", konbini: "コンビニ払い（デモ）" };
+  if (paymentMethod === "card") {
+    const number = (document.querySelector("#demo-card-number")?.value || "").replace(/\D/g, "");
+    const expiry = document.querySelector("#demo-card-expiry")?.value.trim();
+    const cvc = document.querySelector("#demo-card-cvc")?.value.trim();
+    if (number !== "4242424242424242" || expiry !== "12/30" || cvc !== "123") {
+      showToast("カード決済デモには表示されたテスト値だけを入力してください");
+      document.querySelector("#demo-card-number")?.focus();
+      return;
+    }
+  }
+  const paymentStore = paymentMethod === "konbini" ? (document.querySelector("#konbini-store")?.value || "セブン‐イレブン") : "";
+  const items = cartEntries().map(({ product, quantity }) => ({ id: product.id, quantity }));
+  if (!items.length) { showToast("カートに商品がありません"); return; }
+  button.disabled = true;
+  button.textContent = "デモ注文を確認中…";
+  try {
+    if (apiConfigured) {
+      const result = await apiRequest("demo-orders.php", { method: "POST", body: JSON.stringify({ items, paymentMethod, paymentStore }) });
+      lastOrder = result.order;
+      if (!lastOrder?.number) throw new Error("注文結果を読み取れませんでした");
+      serverOrdersLoaded = true;
+      serverOrdersError = "";
+      orders = [lastOrder, ...orders.filter((order) => order.number !== lastOrder.number)];
+    } else {
+      const subtotal = cartSubtotal();
+      const shipping = subtotal >= 11000 ? 0 : 660;
+      const paymentDeadline = new Date(); paymentDeadline.setDate(paymentDeadline.getDate() + 3);
+      lastOrder = {
+        number: `PC${new Date().toISOString().slice(0, 10).replaceAll("-", "")}${String(Date.now()).slice(-5)}`,
+        total: subtotal + shipping,
+        date: new Date().toLocaleDateString("ja-JP"),
+        status: paymentMethod === "konbini" ? "コンビニ支払い待ち（デモ）" : "決済完了（デモ）",
+        paymentMethod, paymentLabel: paymentLabels[paymentMethod] || "デモ決済",
+        paymentStore, paymentCode: paymentMethod === "konbini" ? String(Math.floor(100000 + Math.random() * 900000)) : "",
+        paymentDeadline: paymentMethod === "konbini" ? paymentDeadline.toLocaleDateString("ja-JP") : "",
+        items,
+      };
+      orders = [lastOrder, ...orders];
+      storage.set("pcparts-orders", orders);
+    }
+    cart = {};
+    persistCart();
+    go("success");
+  } catch (error) {
+    showToast(error.message || "デモ注文の保存に失敗しました");
+    button.disabled = false;
+    button.textContent = "デモ注文を確定する";
+  }
 }
 
 document.addEventListener("click", (event) => {
@@ -852,43 +1057,23 @@ document.addEventListener("click", (event) => {
   if (kind === "buy-now") { addToCart(id); go("cart"); }
   if (kind === "change-cart") { const next = Math.max(0, (Number(cart[id]) || 0) + Number(action.dataset.delta)); const product = findProduct(id); if (next > Number(product?.stock)) { showToast("管理画面で在庫を確認してから数量を変更してください"); return; } cart[id] = next; if (!cart[id]) delete cart[id]; persistCart(); renderCart(); }
   if (kind === "remove-cart") { delete cart[id]; persistCart(); renderCart(); showToast("カートから商品を削除しました"); }
-  if (kind === "checkout") { if (!currentUser) go("auth"); else go("checkout"); }
-  if (kind === "place-order") {
-    const paymentMethod = document.querySelector('input[name="payment"]:checked')?.value || "card";
-    const paymentLabels = { card: "クレジット / デビットカード（デモ）", paypay: "PayPay（デモ）", rakutenpay: "楽天ペイ（デモ）", transport: "交通系電子マネー（デモ）", konbini: "コンビニ払い（デモ）" };
-    if (paymentMethod === "card") {
-      const number = (document.querySelector("#demo-card-number")?.value || "").replace(/\D/g, "");
-      const expiry = document.querySelector("#demo-card-expiry")?.value.trim();
-      const cvc = document.querySelector("#demo-card-cvc")?.value.trim();
-      if (number !== "4242424242424242" || expiry !== "12/30" || cvc !== "123") {
-        showToast("カード決済デモには表示されたテスト値だけを入力してください");
-        document.querySelector("#demo-card-number")?.focus();
-        return;
-      }
-    }
-    const subtotal = cartSubtotal(); const shipping = subtotal >= 11000 ? 0 : 660;
-    const paymentStore = paymentMethod === "konbini" ? (document.querySelector("#konbini-store")?.value || "セブン‐イレブン") : "";
-    const paymentDeadline = new Date(); paymentDeadline.setDate(paymentDeadline.getDate() + 3);
-    lastOrder = {
-      number: `PC${new Date().toISOString().slice(0, 10).replaceAll("-", "")}${String(Date.now()).slice(-5)}`,
-      total: subtotal + shipping,
-      date: new Date().toLocaleDateString("ja-JP"),
-      status: paymentMethod === "konbini" ? "コンビニ支払い待ち（デモ）" : "決済完了（デモ）",
-      paymentMethod,
-      paymentLabel: paymentLabels[paymentMethod] || "デモ決済",
-      paymentStore,
-      paymentCode: paymentMethod === "konbini" ? String(Math.floor(100000 + Math.random() * 900000)) : "",
-      paymentDeadline: paymentMethod === "konbini" ? paymentDeadline.toLocaleDateString("ja-JP") : "",
-      items: cartEntries().map(({ product, quantity }) => ({ id: product.id, quantity })),
-    };
-    orders = [lastOrder, ...orders]; storage.set("pcparts-orders", orders); cart = {}; persistCart(); go("success");
-  }
+  if (kind === "checkout") { if (!currentUser && !apiConfigured) go("auth"); else go("checkout"); }
+  if (kind === "place-order") placeDemoOrder(action);
   if (kind === "clear-filter") { catalogFilter = { category: "すべて", query: "", min: "", max: "", sort: "おすすめ順" }; catalogPage = 1; renderHome(); }
   if (kind === "account-menu") { if (id === "logout") { currentUser = null; storage.set("pcparts-user", currentUser); showToast("ログアウトしました"); go("home"); } else go(id); }
-  if (kind === "order-detail") { const order = getSampleOrders().find((item) => item.number === id); if (order) openModal("注文内容", `${safeText(order.date)}のご注文（${safeText(order.number)}）<hr />${order.items.map((item) => { const product = findProduct(item.id); return product ? `<div class="summary-line"><span>${safeText(product.name)} × ${item.quantity}</span><strong>${yen(product.price * item.quantity)}</strong></div>` : ""; }).join("")}<div class="summary-total"><span>合計</span><strong>${yen(order.total)}</strong></div>${order.paymentLabel ? `<div class="summary-line"><span>支払い方法</span><strong>${safeText(order.paymentLabel)}</strong></div>` : ""}${order.paymentStore ? `<div class="summary-line"><span>お支払い先</span><strong>${safeText(order.paymentStore)}</strong></div>` : ""}${order.paymentCode ? `<div class="summary-line"><span>デモ払込番号</span><strong>${safeText(order.paymentCode)}</strong></div>` : ""}${order.paymentDeadline ? `<div class="summary-line"><span>期限（デモ）</span><strong>${safeText(order.paymentDeadline)}</strong></div>` : ""}`); }
+  if (kind === "order-detail") {
+    const order = getSampleOrders().find((item) => item.number === id);
+    if (order) openModal("デモ注文内容", `${safeText(order.date)}のご注文（${safeText(order.number)}）<hr />${order.items.map((item) => {
+      const product = findProduct(item.id);
+      const name = item.name || product?.name || item.id;
+      const unitPrice = Number(item.unitPrice ?? product?.price);
+      return `<div class="summary-line"><span>${safeText(name)} × ${Number(item.quantity) || 0}</span><strong>${Number.isFinite(unitPrice) ? yen(unitPrice * Number(item.quantity)) : "—"}</strong></div>`;
+    }).join("")}<div class="summary-total"><span>合計</span><strong>${yen(order.total)}</strong></div>${order.paymentLabel ? `<div class="summary-line"><span>支払い方法</span><strong>${safeText(order.paymentLabel)}</strong></div>` : ""}${order.paymentStore ? `<div class="summary-line"><span>お支払い先</span><strong>${safeText(order.paymentStore)}</strong></div>` : ""}${order.paymentCode ? `<div class="summary-line"><span>デモ払込番号</span><strong>${safeText(order.paymentCode)}</strong></div>` : ""}${order.paymentDeadline ? `<div class="summary-line"><span>期限（デモ）</span><strong>${safeText(order.paymentDeadline)}</strong></div>` : ""}<p class="summary-note">実際の決済・請求・発送は行われません。</p>`);
+  }
+  if (kind === "orders-refresh") { serverOrdersLoaded = false; refreshServerOrders(); renderOrders(); }
   if (kind === "wizard-back") { wizardStep = Math.max(0, wizardStep - 1); renderWizard(); }
-  if (kind === "restart-wizard") { serverAiProposal = null; wizardStep = 0; wizardAnswers = { budget: "", use: "", games: "", style: "", equipment: "", conditions: "" }; go("ai"); }
-  if (kind === "add-build") { const ids = action.dataset.ids.split(","); if (ids.some((productId) => !findProduct(productId)?.stock)) { showToast("在庫未確認の商品を含むため、管理画面で在庫確認が必要です"); return; } ids.forEach((productId) => { cart[productId] = (Number(cart[productId]) || 0) + 1; }); persistCart(); showToast("おすすめ構成をカートに追加しました"); go("cart"); }
+  if (kind === "restart-wizard") { serverAiProposal = null; serverAiError = ""; wizardStep = 0; wizardAnswers = { budget: "", use: "", games: "", style: "", equipment: "", conditions: "" }; go("ai"); }
+  if (kind === "add-build") { const ids = (action.dataset.ids || "").split(",").filter(Boolean); if (!ids.length) { showToast("カートに追加できる構成がありません"); return; } if (ids.some((productId) => !findProduct(productId)?.stock)) { showToast("在庫未確認の商品を含むため、管理画面で在庫確認が必要です"); return; } ids.forEach((productId) => { cart[productId] = (Number(cart[productId]) || 0) + 1; }); persistCart(); showToast("おすすめ構成をカートに追加しました"); go("cart"); }
   if (kind === "adjust-budget") { const currentBudget = parseBudget(wizardAnswers.budget) || 200000; wizardAnswers.budget = `${Math.max(100000, currentBudget - 20000).toLocaleString("ja-JP")}円`; renderAiResult(); showToast("予算を抑えた構成を再計算しました"); }
   if (kind === "admin-add") adminProductForm();
   if (kind === "catalog-page") { catalogPage = Math.max(1, Number(action.dataset.page) || 1); renderHome(); document.querySelector(".product-toolbar")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
@@ -897,19 +1082,20 @@ document.addEventListener("click", (event) => {
   if (kind === "admin-import-confirm") {
     if (!pendingCatalogImport.length) return;
     action.disabled = true;
-    importCatalog(pendingCatalogImport).then((count) => {
-      pendingCatalogImport = []; document.querySelector("#modal-root").innerHTML = ""; renderAdmin(); showToast(`${count} 件の商品を一括登録しました`);
-    }).catch((error) => { action.disabled = false; showToast(error.message || "商品一括登録に失敗しました"); });
+    importCatalog(pendingCatalogImport, (done, total) => { action.textContent = `取り込み中 ${done} / ${total} 件`; }).then((count) => {
+      pendingCatalogImport = []; document.querySelector("#modal-root").innerHTML = ""; renderAdmin(); showToast(apiConfigured ? `${count} 件の商品候補を下書きに取り込みました` : `${count} 件の商品を登録しました`);
+    }).catch((error) => { action.disabled = false; action.textContent = "下書きとして取り込む"; showToast(error.message || "商品候補の取り込みに失敗しました"); });
   }
-  if (kind === "admin-edit") { const product = findProduct(id); if (product) adminProductForm(product); }
-  if (kind === "admin-delete") { const product = findProduct(id); if (product) openModal("商品を削除", `<p>「${safeText(product.name)}」を商品一覧から削除しますか？</p><div class="modal-form-actions"><button class="button button--outline" data-action="close-modal">戻る</button><button class="button button--danger" data-action="admin-confirm-delete" data-id="${safeText(product.id)}">削除する</button></div>`); }
+  if (kind === "admin-edit") { const product = (apiConfigured ? adminProducts : products).find((item) => item.id === id); if (product) adminProductForm(product); }
+  if (kind === "admin-delete") { const product = (apiConfigured ? adminProducts : products).find((item) => item.id === id); if (product) { const deactivate = apiConfigured && product.isActive !== false; openModal(deactivate ? "商品を非公開にする" : "商品を削除", `<p>「${safeText(product.name)}」を${deactivate ? "商品一覧から非公開に" : "管理画面から削除"}しますか？</p><div class="modal-form-actions"><button class="button button--outline" data-action="close-modal">戻る</button><button class="button button--danger" data-action="admin-confirm-delete" data-id="${safeText(product.id)}">${deactivate ? "非公開にする" : "削除する"}</button></div>`); } }
   if (kind === "admin-confirm-delete") {
     deleteAdminProduct(id);
   }
   if (kind === "admin-logout") {
-    if (apiConfigured) apiRequest("admin/logout.php", { method: "POST", body: "{}" }).catch(() => {}).finally(() => { adminAuthenticated = false; adminStatusChecked = false; go("admin-login"); });
+    if (apiConfigured) apiRequest("admin/logout.php", { method: "POST", body: "{}" }).catch(() => {}).finally(() => { adminAuthenticated = false; adminStatusChecked = false; adminCatalogLoaded = false; adminProducts = []; go("admin-login"); });
     else go("home");
   }
+  if (kind === "admin-refresh") { adminCatalogError = ""; refreshAdminCatalog(); }
   if (kind === "close-modal") { if (event.target.classList.contains("modal-backdrop") || event.target.closest(".modal-close") || event.target.closest("button[data-action='close-modal']")) document.querySelector("#modal-root").innerHTML = ""; }
   if (kind === "close-drawer") { if (event.target.classList.contains("drawer-backdrop") || event.target.closest(".drawer-close") || event.target.closest("button[data-action='close-drawer']")) closeDrawer(); }
 });
@@ -922,14 +1108,14 @@ document.addEventListener("change", (event) => {
     pendingCatalogImport = [];
     confirm.disabled = true;
     const file = event.target.files?.[0];
-    if (!file) { preview.textContent = "JSONファイルを選ぶと登録内容を確認できます。"; return; }
+    if (!file) { preview.textContent = "JSONファイルを選ぶと候補を確認できます。"; return; }
     file.text().then((text) => {
       const payload = JSON.parse(text);
       pendingCatalogImport = validateImportedCatalog(payload);
       const categories = Object.entries(Object.groupBy ? Object.groupBy(pendingCatalogImport, (item) => item.category) : pendingCatalogImport.reduce((groups, item) => ((groups[item.category] ||= []).push(item), groups), {})).map(([name, items]) => `${name} ${items.length}件`).join(" / ");
       const images = pendingCatalogImport.filter((item) => item.imageUrl).length;
       const links = pendingCatalogImport.filter((item) => item.productUrl).length;
-      preview.textContent = `${pendingCatalogImport.length}件を登録します。カテゴリ：${categories}。画像 ${images}件 / 販売ページ ${links}件。`;
+      preview.textContent = `${pendingCatalogImport.length}件を${apiConfigured ? "下書きとして取り込みます" : "登録します"}。カテゴリ：${categories}。画像 ${images}件 / 販売ページ ${links}件。`;
       confirm.disabled = false;
     }).catch((error) => {
       preview.textContent = `読み込みできません：${error.message || "JSON形式を確認してください。"}`;
@@ -950,7 +1136,7 @@ document.addEventListener("submit", (event) => {
     const data = new FormData(form); catalogFilter.min = data.get("min") || ""; catalogFilter.max = data.get("max") || ""; catalogFilter.category = data.get("category") || "すべて"; catalogFilter.query = data.get("query") || ""; catalogPage = 1; renderHome();
   }
   if (form.id === "admin-filter-form") {
-    const data = new FormData(form); adminQuery = String(data.get("query") || ""); adminCategory = String(data.get("category") || "すべて"); adminPlatform = String(data.get("platform") || "すべて"); adminPage = 1; renderAdmin();
+    const data = new FormData(form); adminQuery = String(data.get("query") || ""); adminCategory = String(data.get("category") || "すべて"); adminPlatform = String(data.get("platform") || "すべて"); adminListingStatus = String(data.get("listingStatus") || "すべて"); adminPage = 1; renderAdmin();
   }
   if (form.id === "admin-product-form") {
     submitAdminProduct(form);
@@ -982,8 +1168,8 @@ document.addEventListener("submit", (event) => {
         designAndPerformance: wizardAnswers.style, ownedEquipment: wizardAnswers.equipment, otherConditions: wizardAnswers.conditions,
       };
       apiRequest("ai/consult.php", { method: "POST", body: JSON.stringify(consultation) })
-        .then((proposal) => { serverAiProposal = proposal; go("ai-result"); })
-        .catch((error) => { serverAiProposal = null; showToast(error.message || "AI相談に接続できませんでした。サンプル構成を表示します"); go("ai-result"); });
+        .then((proposal) => { serverAiError = ""; serverAiProposal = proposal; go("ai-result"); })
+        .catch((error) => { serverAiProposal = null; serverAiError = error.message || "接続を確認してください。"; go("ai-result"); });
     } else go("ai-result");
   }
 });

@@ -81,3 +81,39 @@ CREATE TABLE order_items (
   CONSTRAINT fk_order_items_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL,
   INDEX idx_order_items_order (order_id)
 );
+
+-- Demonstration checkout is kept separate from real orders. No payment or
+-- delivery details are collected, and these rows never reserve inventory.
+CREATE TABLE demo_orders (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  order_code VARCHAR(40) NOT NULL UNIQUE,
+  session_key CHAR(64) NOT NULL,
+  payment_method VARCHAR(20) NOT NULL,
+  payment_store VARCHAR(40) NOT NULL DEFAULT '',
+  payment_code VARCHAR(6) NOT NULL DEFAULT '',
+  payment_deadline DATE NULL,
+  subtotal INT UNSIGNED NOT NULL,
+  shipping_price INT UNSIGNED NOT NULL,
+  total_price INT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL,
+  INDEX idx_demo_orders_session_created (session_key, created_at)
+);
+
+CREATE TABLE demo_order_items (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  order_id BIGINT UNSIGNED NOT NULL,
+  catalog_key VARCHAR(100) NOT NULL,
+  product_name_snapshot VARCHAR(255) NOT NULL,
+  unit_price INT UNSIGNED NOT NULL,
+  quantity INT UNSIGNED NOT NULL,
+  CONSTRAINT fk_demo_order_items_order FOREIGN KEY (order_id) REFERENCES demo_orders(id) ON DELETE CASCADE,
+  INDEX idx_demo_order_items_order (order_id)
+);
+
+CREATE TABLE ai_rate_limits (
+  client_hash CHAR(64) NOT NULL PRIMARY KEY,
+  window_started_at DATETIME NOT NULL,
+  request_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  updated_at DATETIME NOT NULL,
+  INDEX idx_ai_rate_limits_updated (updated_at)
+);
