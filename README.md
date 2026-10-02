@@ -98,7 +98,7 @@ docker compose -f backend/docker-compose.yml exec -e DB_HOST=db -e ADMIN_PASSWOR
 - AI相談はPHPサーバーからGemini APIを呼び出します。`GEMINI_API_KEY`と`GEMINI_MODEL`をサーバー環境変数に設定してください。
 - 相談時だけ楽天市場APIの商品を相場参考として取得します。楽天の商品は画面に参考情報として表示し、MySQLの商品カタログやカートへ登録しません。
 - AIが購入候補として返せる商品IDはMySQLの有効な自社カタログに含まれるものだけです。
-- 楽天アプリIDを`RAKUTEN_APP_ID`に設定します。使う契約でアクセスキーが必要な場合は`RAKUTEN_ACCESS_KEY`もサーバーへ設定します。
+- 楽天市場の相談用参考商品を表示するには`RAKUTEN_APP_ID`と`RAKUTEN_ACCESS_KEY`の両方をサーバーへ設定します。2026-07-01版の商品検索APIでは両方が必須です。楽天の商品情報は楽天の商品ページへリンクする参考表示に限り、自社販売商品の画像・価格・説明として転用しません。[楽天の利用目的に関する公式ヘルプ](https://webservice.faq.rakuten.net/hc/ja/articles/900001974363-%E5%90%84API%E3%81%A7%E5%8F%96%E5%BE%97%E3%81%97%E3%81%9F%E6%83%85%E5%A0%B1%E3%81%AF%E3%81%A9%E3%81%AE%E3%82%88%E3%81%86%E3%81%AA%E7%9B%AE%E7%9A%84%E3%81%A7%E5%88%A9%E7%94%A8%E3%81%A7%E3%81%8D%E3%81%BE%E3%81%99%E3%81%8B)を参照してください。
 - APIキーを`config.js`やブラウザ側のJavaScriptへ入れないでください。
 
 GitHub Pages用`config.js`の`PC_PARTS_API_BASE_URL`は空欄のままです。PHPサーバーに配置するページは同一ドメインの`/api`を参照するため、別ドメインのCORS設定は不要です。

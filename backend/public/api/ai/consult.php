@@ -150,40 +150,72 @@ limit_ai_request($pdo, $apiKey);
 // Rakuten data is returned only as external comparison context. It never becomes a catalog item or a cart ID.
 $references = [];
 $rakutenAppId = env_value('RAKUTEN_APP_ID');
+$rakutenAccessKey = env_value('RAKUTEN_ACCESS_KEY');
+$referenceStatus = 'not_configured';
+$referenceNotice = '';
 $requestText = implode(' ', [$answers['useCase'], $answers['gamesAndTasks'], $answers['designAndPerformance'], $answers['otherConditions']]);
 $searchTerm = preg_match('/(GPU|グラボ|グラフィック|fps|ゲーム|ARK|VALORANT)/iu', $requestText) ? 'GeForce RTX 5070' :
     (preg_match('/(CPU|プロセッサ|配信|動画|Blender|CAD|開発|編集)/iu', $requestText) ? 'Ryzen 7 7700' :
     (preg_match('/(メモリ|RAM)/iu', $requestText) ? 'DDR5 32GB' : 'PCパーツ'));
 $rakutenKeyword = mb_substr($searchTerm, 0, 100);
-if ($rakutenAppId && function_exists('curl_init')) {
+if (!$rakutenAppId || !$rakutenAccessKey) {
+    $referenceNotice = '楽天市場の参考商品はAPI設定が未完了のため表示していません。';
+} else {
     $rakutenParams = [
         'applicationId' => $rakutenAppId,
         'keyword' => $rakutenKeyword,
         'formatVersion' => 2,
         'hits' => 5,
         'sort' => '+itemPrice',
+        'imageFlag' => 1,
+        'availability' => 1,
     ];
-    if ($accessKey = env_value('RAKUTEN_ACCESS_KEY')) $rakutenParams['accessKey'] = $accessKey;
-    $url = 'https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601?' . http_build_query($rakutenParams);
+    $url = 'https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701?' . http_build_query($rakutenParams, '', '&', PHP_QUERY_RFC3986);
     $curl = curl_init($url);
-    curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8, CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_USERAGENT => 'PCPartsShop/1.0']);
+    curl_setopt_array($curl, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 8,
+        CURLOPT_CONNECTTIMEOUT => 4,
+        CURLOPT_USERAGENT => 'PCPartsShop/1.0',
+        CURLOPT_HTTPHEADER => ['Accept: application/json', 'accessKey: ' . $rakutenAccessKey],
+    ]);
     $rakutenBody = curl_exec($curl);
     $rakutenStatus = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
     curl_close($curl);
     if (is_string($rakutenBody) && $rakutenStatus >= 200 && $rakutenStatus < 300) {
         $rakuten = json_decode($rakutenBody, true);
-        foreach (($rakuten['Items'] ?? []) as $entry) {
-            $item = $entry['Item'] ?? $entry;
-            if (!isset($item['itemName'], $item['itemPrice'], $item['itemUrl'])) continue;
-            $references[] = [
-                'itemName' => mb_substr((string)$item['itemName'], 0, 200),
-                'price' => (int)$item['itemPrice'],
-                'imageUrl' => (string)($item['mediumImageUrls'][0]['imageUrl'] ?? ''),
-                'productUrl' => (string)$item['itemUrl'],
-                'shopName' => mb_substr((string)($item['shopName'] ?? ''), 0, 100),
-                'referenceOnly' => true,
-            ];
+        if (is_array($rakuten) && is_array($rakuten['items'] ?? null)) {
+            $retrievedAt = gmdate('c');
+            foreach ($rakuten['items'] as $item) {
+                if (!is_array($item) || !isset($item['itemName'], $item['itemPrice'], $item['itemUrl']) || trim((string)$item['itemName']) === '') continue;
+                $productUrl = (string)$item['itemUrl'];
+                $host = strtolower((string)parse_url($productUrl, PHP_URL_HOST));
+                $price = filter_var($item['itemPrice'], FILTER_VALIDATE_INT);
+                if (!filter_var($productUrl, FILTER_VALIDATE_URL) || !preg_match('/(^|\\.)rakuten\\.co\\.jp$/', $host) || !str_starts_with($productUrl, 'https://') || $price === false || $price < 1) continue;
+                $image = $item['mediumImageUrls'][0] ?? '';
+                $imageUrl = is_string($image) ? $image : (is_array($image) ? (string)($image['imageUrl'] ?? '') : '');
+                if (!str_starts_with($imageUrl, 'https://')) $imageUrl = '';
+                $references[] = [
+                    'itemName' => mb_substr((string)$item['itemName'], 0, 200),
+                    'price' => $price,
+                    'imageUrl' => $imageUrl,
+                    'productUrl' => $productUrl,
+                    'shopName' => mb_substr((string)($item['shopName'] ?? ''), 0, 100),
+                    'referenceOnly' => true,
+                    'retrievedAt' => $retrievedAt,
+                ];
+            }
+            $referenceStatus = $references ? 'ok' : 'no_results';
+            if (!$references) $referenceNotice = '楽天市場で表示できる参考商品が見つかりませんでした。';
+        } else {
+            $referenceStatus = 'unavailable';
+            $referenceNotice = '楽天市場の参考商品を取得できませんでした。自社商品の構成提案は続けられます。';
+            error_log('Rakuten consultation reference response was invalid.');
         }
+    } else {
+        $referenceStatus = 'unavailable';
+        $referenceNotice = '楽天市場の参考商品を取得できませんでした。自社商品の構成提案は続けられます。';
+        error_log('Rakuten consultation reference request failed with HTTP ' . $rakutenStatus);
     }
 }
 
@@ -270,11 +302,18 @@ if ($selectedCpu !== null) {
 $total = array_sum(array_map(static fn(array $item): int => (int)$item['price'], $recommended));
 $summary = mb_substr(is_scalar($proposal['summary'] ?? null) ? (string)$proposal['summary'] : '', 0, 1000);
 if ($compatibilityNote !== '') $summary = trim($summary . ' ' . $compatibilityNote);
+if ($referenceStatus === 'not_configured' || $referenceStatus === 'unavailable') {
+    $summary = trim(mb_substr($summary, 0, max(0, 999 - mb_strlen($referenceNotice))) . ' ' . $referenceNotice);
+}
+$referenceNotes = is_scalar($proposal['referenceNotes'] ?? null) ? (string)$proposal['referenceNotes'] : '';
+if ($referenceNotice !== '') $referenceNotes = trim($referenceNotes . ' ' . $referenceNotice);
 json_response([
     'summary' => mb_substr($summary, 0, 1000),
     'imagePrompt' => mb_substr(is_scalar($proposal['imagePrompt'] ?? null) ? (string)$proposal['imagePrompt'] : '', 0, 1000),
     'items' => $recommended,
     'totalPrice' => $total,
     'references' => $references,
-    'referenceNotes' => mb_substr(is_scalar($proposal['referenceNotes'] ?? null) ? (string)$proposal['referenceNotes'] : '', 0, 1000),
+    'referenceStatus' => $referenceStatus,
+    'referenceNotice' => $referenceNotice,
+    'referenceNotes' => mb_substr($referenceNotes, 0, 1000),
 ]);

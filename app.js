@@ -494,12 +494,8 @@ function renderAuth(mode = "login") {
   const admin = mode === "admin-login";
   const register = mode === "register";
   const heading = admin ? "管理者ログイン" : register ? "会員登録" : "おかえりなさい";
-  app.innerHTML = `${breadcrumb(heading, "")}<section class="auth-layout"><aside class="auth-aside"><div class="auth-aside__content"><a class="brand brand--footer" href="#/home"><span class="brand__mark"><svg viewBox="0 0 42 42"><path d="M21 2 39 12v18L21 40 3 30V12L21 2Z"/><path d="M3 12 21 22l18-10M21 22v18"/></svg></span><span class="brand__wordmark">PC PARTS <span>SHOP</span><small>BUILD YOUR NEXT PC</small></span></a><h1>${register ? "理想のPCづくりを、ここから。" : "パーツ選びを、もっと楽しく。"}</h1><p>${register ? "アカウントを作成して、お気に入りや購入履歴をまとめて管理しましょう。" : "アカウントにログインして、お買い物を続けましょう。"}</p></div><div class="auth-aside__bottom">YOUR NEXT BUILD STARTS HERE</div></aside><div class="auth-form-wrap"><span class="eyebrow">${admin ? "SHOP ADMIN" : register ? "CREATE ACCOUNT" : "MY ACCOUNT"}</span><h2>${heading}</h2><p>${admin ? "管理者画面のデモにログインしてください。" : register ? "必要な情報を入力してください。" : "アカウント情報を入力してください。"}</p><form id="auth-form" data-mode="${mode}">${register ? formField("ユーザー名", "name", "例）山田 太郎") : ""}${formField("メールアドレス", "email", "example@sample.com", "email")}${formField("パスワード", "password", "8文字以上", "password", "", "デモ用に任意の値を入力してください。")}${register ? formField("パスワード（確認）", "passwordConfirm", "もう一度入力", "password") : ""}${register ? `<label style="display:flex;gap:7px;align-items:center;margin:2px 0 15px;color:#6b7b91;font-size:10px"><input type="checkbox" name="terms" required />利用規約に同意する</label>` : ""}<button class="button button--wide" type="submit">${admin ? "ログイン" : register ? "アカウントを作成" : "ログイン"}</button></form>${!register && !admin ? `<div class="form-footer"><a href="#/register">新規会員登録</a><a href="#/register">パスワードをお忘れの方</a></div>` : ""}<div class="form-separator">または</div><button class="button button--outline button--wide" data-go="${register ? "auth" : "register"}">${register ? "ログインはこちら" : "新規会員登録はこちら"}</button>${admin ? `<button class="text-link" style="justify-content:center;margin-top:13px" data-go="home">ショップへ戻る</button>` : ""}</div></section>`;
+  app.innerHTML = `${breadcrumb(heading, "")}<section class="auth-layout"><aside class="auth-aside"><div class="auth-aside__content"><a class="brand brand--footer" href="#/home"><span class="brand__mark"><svg viewBox="0 0 42 42"><path d="M21 2 39 12v18L21 40 3 30V12L21 2Z"/><path d="M3 12 21 22l18-10M21 22v18"/></svg></span><span class="brand__wordmark">PC PARTS <span>SHOP</span><small>BUILD YOUR NEXT PC</small></span></a><h1>${register ? "理想のPCづくりを、ここから。" : "パーツ選びを、もっと楽しく。"}</h1><p>${register ? "アカウントを作成して、お気に入りや購入履歴をまとめて管理しましょう。" : "アカウントにログインして、お買い物を続けましょう。"}</p></div><div class="auth-aside__bottom">YOUR NEXT BUILD STARTS HERE</div></aside><div class="auth-form-wrap"><span class="eyebrow">${admin ? "SHOP ADMIN" : register ? "CREATE ACCOUNT" : "MY ACCOUNT"}</span><h2>${heading}</h2><p>${admin ? (apiConfigured ? "登録済みの管理者アカウントでログインしてください。" : "管理者画面のデモにログインしてください。") : register ? "必要な情報を入力してください。" : "アカウント情報を入力してください。"}</p><form id="auth-form" data-mode="${mode}">${register ? formField("ユーザー名", "name", "例）山田 太郎") : ""}${formField("メールアドレス", "email", "example@sample.com", "email")}${formField("パスワード", "password", "8文字以上", "password", "", admin && apiConfigured ? "管理者パスワードを入力してください。" : "デモ用に任意の値を入力してください。")}${register ? formField("パスワード（確認）", "passwordConfirm", "もう一度入力", "password") : ""}${register ? `<label style="display:flex;gap:7px;align-items:center;margin:2px 0 15px;color:#6b7b91;font-size:10px"><input type="checkbox" name="terms" required />利用規約に同意する</label>` : ""}<button class="button button--wide" type="submit">${admin ? "ログイン" : register ? "アカウントを作成" : "ログイン"}</button></form>${!register && !admin ? `<div class="form-footer"><a href="#/register">新規会員登録</a><a href="#/register">パスワードをお忘れの方</a></div>` : ""}<div class="form-separator">または</div><button class="button button--outline button--wide" data-go="${register ? "auth" : "register"}">${register ? "ログインはこちら" : "新規会員登録はこちら"}</button>${admin ? `<button class="text-link" style="justify-content:center;margin-top:13px" data-go="home">ショップへ戻る</button>` : ""}</div></section>`;
   if (admin && apiConfigured) {
-    const intro = document.querySelector(".auth-form-wrap > p");
-    if (intro) intro.textContent = "登録済みの管理者アカウントでログインしてください。";
-    const passwordHint = document.querySelector('#auth-form input[name="password"] + .form-hint');
-    if (passwordHint) passwordHint.textContent = "管理者パスワードを入力してください。";
     document.querySelector(".form-separator")?.remove();
     document.querySelector('.auth-form-wrap > button[data-go="register"]')?.remove();
   }
@@ -576,7 +572,7 @@ function renderAdminContent() {
   const allShown = adminFilteredProducts();
   const pageSize = 50; const pageCount = Math.max(1, Math.ceil(allShown.length / pageSize)); adminPage = Math.min(adminPage, pageCount);
   const shown = allShown.slice((adminPage - 1) * pageSize, adminPage * pageSize);
-  app.innerHTML = `${breadcrumb("商品管理", "管理者ページ")}<div class="page-heading"><div><span class="eyebrow">SHOP MANAGEMENT</span><h1>商品管理</h1><p>登録した商品は商品一覧とカートに表示されます。</p></div></div><div class="admin-toolbar"><div class="admin-toolbar__copy"><strong>登録商品一覧</strong><small>${allShown.length} 件を表示（全 ${products.length} 件） / ${apiConfigured ? "MySQLカタログに保存" : "このブラウザに保存"}</small></div><div class="admin-toolbar-actions"><button class="button" data-action="admin-add">＋ 商品を登録</button><button class="button button--outline" data-action="admin-import">JSON一括登録</button><button class="button button--outline" data-action="admin-logout">ログアウト</button></div></div><form id="admin-filter-form" class="filter-controls admin-filter"><input class="field" name="query" type="search" placeholder="商品名・メーカーで検索" value="${safeText(adminQuery)}"><select class="select" name="category"><option ${adminCategory === "すべて" ? "selected" : ""}>すべて</option>${categoryItems.map(([name]) => `<option ${adminCategory === name ? "selected" : ""}>${safeText(name)}</option>`).join("")}</select><button class="button button--outline" type="submit">検索</button></form><div class="table-wrap"><table class="data-table"><thead><tr><th>商品情報</th><th>カテゴリ</th><th>価格</th><th>在庫数</th><th>操作</th></tr></thead><tbody>${shown.map((product) => `<tr><td><div class="table-product">${productImage(product)}<span><strong>${safeText(product.name)}</strong><small>${safeText(product.maker)}${product.isDemoPrice ? " ・仮価格" : ""}</small></span></div></td><td>${safeText(product.category)}</td><td>${yen(product.price)}</td><td>${Number(product.stock) || 0}</td><td><div class="table-actions"><button class="button button--outline" data-action="admin-edit" data-id="${safeText(product.id)}">編集</button><button class="button button--danger" data-action="admin-delete" data-id="${safeText(product.id)}">削除</button></div></td></tr>`).join("") || `<tr><td colspan="5">条件に合う商品がありません。</td></tr>`}</tbody></table></div>${pageCount > 1 ? `<nav class="catalog-pagination" aria-label="管理画面のページ移動"><button class="button button--outline" data-action="admin-page" data-page="${adminPage - 1}" ${adminPage === 1 ? "disabled" : ""}>← 前へ</button><span>${adminPage} / ${pageCount} ページ</span><button class="button button--outline" data-action="admin-page" data-page="${adminPage + 1}" ${adminPage === pageCount ? "disabled" : ""}>次へ →</button></nav>` : ""}`;
+  app.innerHTML = `${breadcrumb("商品管理", "管理者ページ")}<div class="page-heading"><div><span class="eyebrow">SHOP MANAGEMENT</span><h1>商品管理</h1><p>登録した商品は商品一覧とカートに表示されます。</p></div></div><div class="admin-toolbar"><div class="admin-toolbar__copy"><strong>登録商品一覧</strong><small>${allShown.length} 件を表示（全 ${apiConfigured ? adminProducts.length : products.length} 件） / ${apiConfigured ? "MySQLカタログに保存" : "このブラウザに保存"}</small></div><div class="admin-toolbar-actions"><button class="button" data-action="admin-add">＋ 商品を登録</button><button class="button button--outline" data-action="admin-logout">ログアウト</button></div></div><form id="admin-filter-form" class="filter-controls admin-filter"><input class="field" name="query" type="search" placeholder="商品名・メーカーで検索" value="${safeText(adminQuery)}"><select class="select" name="category"><option ${adminCategory === "すべて" ? "selected" : ""}>すべて</option>${categoryItems.map(([name]) => `<option ${adminCategory === name ? "selected" : ""}>${safeText(name)}</option>`).join("")}</select><button class="button button--outline" type="submit">検索</button></form><div class="table-wrap"><table class="data-table"><thead><tr><th>商品情報</th><th>カテゴリ</th><th>価格</th><th>在庫数</th><th>操作</th></tr></thead><tbody>${shown.map((product) => `<tr><td><div class="table-product">${productImage(product)}<span><strong>${safeText(product.name)}</strong><small>${safeText(product.maker)}${product.isDemoPrice ? " ・仮価格" : ""}</small></span></div></td><td>${safeText(product.category)}</td><td>${yen(product.price)}</td><td>${Number(product.stock) || 0}</td><td><div class="table-actions"><button class="button button--outline" data-action="admin-edit" data-id="${safeText(product.id)}">編集</button><button class="button button--danger" data-action="admin-delete" data-id="${safeText(product.id)}">削除</button></div></td></tr>`).join("") || `<tr><td colspan="5">条件に合う商品がありません。</td></tr>`}</tbody></table></div>${pageCount > 1 ? `<nav class="catalog-pagination" aria-label="管理画面のページ移動"><button class="button button--outline" data-action="admin-page" data-page="${adminPage - 1}" ${adminPage === 1 ? "disabled" : ""}>← 前へ</button><span>${adminPage} / ${pageCount} ページ</span><button class="button button--outline" data-action="admin-page" data-page="${adminPage + 1}" ${adminPage === pageCount ? "disabled" : ""}>次へ →</button></nav>` : ""}`;
 }
 
 function enhanceAdminScreen() {
@@ -640,8 +636,6 @@ function enhanceAdminScreen() {
   const active = (apiConfigured ? adminProducts : products).filter((product) => product.isActive !== false).length;
   const count = document.querySelector(".admin-toolbar__copy small");
   if (count) count.textContent = `${allShown.length} 件を表示（全 ${total} 件・公開中 ${active} 件・下書き ${total - active} 件） / ${apiConfigured ? "MySQLカタログ" : "このブラウザ"}に保存`;
-  const importButton = document.querySelector('[data-action="admin-import"]');
-  if (importButton) importButton.textContent = "外部商品候補を取り込む";
 }
 
 function renderAdmin() {
@@ -817,18 +811,32 @@ function renderAiResult() {
     compatibilityDisclosure.textContent = `${currentNote} CPUとマザーボードのプラットフォーム・ソケットは照合します。その他パーツ間の完全な互換性保証はありません。`;
   }
   const references = serverAiProposal?.references || [];
+  if (apiConfigured && serverAiProposal?.referenceNotice) {
+    const notice = document.createElement("p");
+    notice.className = "source-caption";
+    notice.textContent = serverAiProposal.referenceNotice;
+    document.querySelector(".recommendation-parts .section-heading")?.after(notice);
+  }
   if (references.length) {
     const referenceSection = document.createElement("section");
     referenceSection.className = "rakuten-references panel";
     const heading = document.createElement("h2"); heading.textContent = "楽天市場の参考商品（購入対象外）"; referenceSection.append(heading);
-    const note = document.createElement("p"); note.textContent = "外部商品の価格は相談時の参考表示です。カートに入るのは当店カタログへの登録商品だけです。"; referenceSection.append(note);
+    const note = document.createElement("p"); note.textContent = "楽天市場の商品は相談用の参考情報です。当店の商品一覧やカートには追加されません。"; referenceSection.append(note);
     const grid = document.createElement("div"); grid.className = "rakuten-reference-grid";
     for (const item of references) {
       const card = document.createElement("article"); card.className = "rakuten-reference";
       const imageUrl = safeHttpUrl(item.imageUrl); const productUrl = safeHttpUrl(item.productUrl);
       if (imageUrl) { const image = document.createElement("img"); image.src = imageUrl; image.alt = ""; image.loading = "lazy"; card.append(image); }
       const title = document.createElement("strong"); title.textContent = item.itemName || "楽天市場商品"; card.append(title);
-      const price = document.createElement("span"); price.textContent = yen(Number(item.price) || 0); card.append(price);
+      const fetchedAt = new Date(item.retrievedAt || "");
+      const referencePrice = Number(item.price);
+      if (Number.isFinite(referencePrice) && referencePrice > 0 && !Number.isNaN(fetchedAt.getTime())) {
+        const price = document.createElement("span"); price.textContent = `楽天市場の参考価格 ${yen(referencePrice)}`; card.append(price);
+        const priceNote = document.createElement("small");
+        const fetchedTime = fetchedAt.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+        priceNote.textContent = `取得：${fetchedTime}。当店の販売価格ではありません。価格・在庫は変わる場合があり、購入時は楽天市場店舗に表示される価格が適用されます。`;
+        card.append(priceNote);
+      }
       const shop = document.createElement("small"); shop.textContent = item.shopName || "楽天市場"; card.append(shop);
       if (productUrl) { const link = document.createElement("a"); link.href = productUrl; link.target = "_blank"; link.rel = "noopener noreferrer"; link.textContent = "楽天市場で見る"; card.append(link); }
       grid.append(card);
