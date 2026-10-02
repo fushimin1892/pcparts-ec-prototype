@@ -12,30 +12,13 @@ python -m http.server 8000
 
 `http://localhost:8000`を開きます。初期カタログには40商品（CPU 28件）を登録しています。管理カテゴリはCPU、GPU、マザーボード、SSD、メモリ、CPUクーラー、ファン、PCケース、PC電源です。CPUとマザーボードはIntel / AMDとソケットを分けて記録します。初期CPU仕様はメーカー公表情報、価格と在庫は試作用の仮値です。管理画面ではカテゴリ・プラットフォームで絞り込み、商品を追加・検索・編集・削除できます。商品一覧は24件、管理画面は50件ずつ表示し、ページ移動できます。
 
-### APIから商品を集めて一括登録
+### 外部ショップの参考商品
 
-外部マーケットの商品をスクレイピングせず公式APIから検索し、画像URL・商品ページURL・ショップ名・説明・取得時点の価格を含むJSONを作れます。Yahoo!ショッピングと楽天市場のキーをローカルPowerShellへ設定します（値はGitHubへ登録しないでください）。
+`#/references`は、出典・取得日時・外部の商品ページを付けて参考商品を表示する画面です。参考商品は自社の`products`テーブルやカートに入りません。表示には、商品情報と画像の掲載、短期保存を許可する提供元フィードが必要です。現時点でその許諾済みフィードやAPI資格情報は設定されていないため、参考商品の掲載件数は0件です。1,000件の実商品や現在価格を作り出して登録することはしません。
 
-```powershell
-$env:YAHOO_APP_ID = "発行されたClient ID"
-$env:RAKUTEN_APP_ID = "発行されたApplication ID"
-$env:RAKUTEN_ACCESS_KEY = "発行されたAccess Key"
-node backend/scripts/import_marketplace_catalog.mjs --target=1000 --output=marketplace-products.json
-```
+設定例は`backend/config.production.php.example`の`REFERENCE_FEED_SOURCES`にあります。取得元の許諾範囲、商品ページ・画像のホスト名、最大保持時間を確認し、公開サーバーの`_private/config.local.php`に設定します。許諾の確認が済むまで`enabled=false`と権利フラグを維持してください。管理者セッションで`POST /api/admin/reference-offers-sync.php`をページごとに呼ぶと、提供元フィードから最大100件ずつ読み込みます。`GET /api/reference-offers.php`は期限内の商品だけを返し、許諾を無効にした取得元の商品も非表示にします。詳細は[API接続仕様](backend/api-contract.md)を参照してください。
 
-その後、管理者としてログインし「JSON一括登録」から生成ファイルを選び、件数・カテゴリ・画像・販売ページを確認して登録します。対応カテゴリは9種で、カテゴリごとに件数を配分します。検索結果が不足するカテゴリは目標より少なくなることがあります。Yahoo APIは1クエリー/秒で取得し、楽天APIは1回最大30件のページ検索を使います。[Yahoo公式API仕様](https://developer.yahoo.co.jp/webapi/shopping/v3/itemsearch.html)は画像の600px取得に対応し、楽天公式APIは画像あり商品の絞り込みと商品ページ・画像URLを返します。[楽天公式API仕様](https://webservice.rakuten.co.jp/index.php/documentation/ichiba-item-search)
-
-商品説明、価格、在庫はAPIを取得した時点の情報です。取り込んだ商品は「参考価格」・在庫0・非公開の下書きで登録します。管理者が説明・販売価格・自社在庫・画像を確認し、公開へ切り替えるまでは商品一覧やカートに表示されません。PC工房、ツクモ、Arkなどのショップ名はAPI応答に含まれる場合そのまま保存し、販売元リンクから個別の商品ページを確認できます。直接APIが提供されない店舗ページを大量巡回して価格や画像を集める処理はしません。
-
-Amazon商品は任意でAmazon.co.jp Creators APIから検索できます。Amazonアソシエイト登録後にCreators APIを登録し、クライアントID / シークレット / Partner Tagを設定してください。SearchItems APIは1回最大10件を返します。API資格がない場合はAmazonを省略します。
-
-```powershell
-$env:AMAZON_CREATORS_CLIENT_ID = "発行されたClient ID"
-$env:AMAZON_CREATORS_CLIENT_SECRET = "発行されたClient Secret"
-$env:AMAZON_PARTNER_TAG = "発行されたPartner Tag"
-```
-
-Amazon公式の[Creators API利用条件](https://affiliate-program.amazon.com/creatorsapi/docs/en-us/onboarding)と[商品検索仕様](https://affiliate-program.amazon.com/creatorsapi/docs/en-us/api-reference/operations/search-items)を確認してください。GitHub PagesだけのデモではJSONは登録したブラウザ内に保存され、チーム共通の商品台帳にはなりません。共有するには後段のPHP/MySQL APIを公開して`config.js`に設定する必要があります。
+既存の`backend/scripts/import_marketplace_catalog.mjs`と管理画面の「JSON一括登録」は、外部参考商品の掲載経路ではありません。この機能は自社販売商品の下書きを作るためのもので、外部サイトの商品画像・価格・説明を自社商品へ転載する許可にはなりません。
 
 ## PHP / MySQLを起動
 
@@ -66,7 +49,7 @@ C:\xampp\php\php.exe C:\xampp\htdocs\pcparts\_private\scripts\create_admin.php a
 1. ロリポップのユーザー専用ページでMySQLデータベースを作成します。既存のサイトを置き換えないよう、公開ディレクトリ内の`pcparts`サブフォルダへ配置する例では`node backend/scripts/build_lolipop_release.mjs --base-path=/pcparts`を実行します。ドメイン直下に配置する場合は`node backend/scripts/build_lolipop_release.mjs`を実行します。
 2. `backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーし、ロリポップのDBホスト名・DB名・ユーザー名・パスワードを記入します。HTTPS公開なので`SESSION_SECURE`は`true`のままにします。必要ならGemini / 楽天のAPIキーもここへ入れます。
 3. `backend/dist-lolipop`の中身を、FTPSで配置先へアップロードします。サブフォルダ配置なら公開ディレクトリ内に`pcparts`を作り、その中へ入れます。ロリポップ公式マニュアルはFTPSとFTPアップロードを案内しています。[FTPS設定](https://lolipop.jp/manual/hp/ftp-set/)、[アップロード方法](https://lolipop.jp/manual/user/ftp2-04/)。`_private/.htaccess`と`database/.htaccess`も必ず一緒にアップロードしてください。パッケージを再生成しても既存の`_private/config.local.php`は保持されます。
-4. phpMyAdminで作成したDBを選択し、`database/schema.sql`をインポートします。続いて40件の画面確認用商品を表示したい場合は`database/seed_products.sql`をインポートします。このSQLは仮価格・在庫0で登録し、画面上のデモ注文だけに利用できます。実販売には利用できません。SSHが使える場合は代わりに`_private/scripts/seed_catalog.php`でも登録できます。管理者はSSHから`ADMIN_PASSWORD`を設定して`_private/scripts/create_admin.php`を実行するか、ローカルXAMPPのPHPで`backend/scripts/generate_admin_sql.php`から管理者登録SQLを作り、phpMyAdminで実行します。管理者パスワードや生成したSQLをGitや公開フォルダへ置かないでください。
+4. phpMyAdminで作成したDBを選択し、`database/schema.sql`をインポートします。既存DBへ参考商品テーブルだけを追加する場合は、`database/migrations/20261002_reference_offers.sql`をDB管理画面から一度だけ実行します。SQLを公開FTPに置かないでください。続いて40件の画面確認用商品を表示したい場合は`database/seed_products.sql`をインポートします。このSQLは仮価格・在庫0で登録し、画面上のデモ注文だけに利用できます。実販売には利用できません。SSHが使える場合は代わりに`_private/scripts/seed_catalog.php`でも登録できます。管理者はSSHから`ADMIN_PASSWORD`を設定して`_private/scripts/create_admin.php`を実行するか、ローカルXAMPPのPHPで`backend/scripts/generate_admin_sql.php`から管理者登録SQLを作り、phpMyAdminで実行します。管理者パスワードや生成したSQLをGitや公開フォルダへ置かないでください。
 5. `https://あなたのドメイン/pcparts/api/health.php`が`database: connected`を返すことを確認し、管理者画面へログインします。
 
 DB接続情報やAPIキーは`_private/config.local.php`だけに置きます。公開画面の`config.js`へ書かないでください。ユーザー専用ページのFTP / DB情報はチャットへ貼らず、生成した`backend/dist-lolipop/_private/config.local.php`へ設定してください。
@@ -91,12 +74,13 @@ docker compose -f backend/docker-compose.yml exec -e DB_HOST=db -e ADMIN_PASSWOR
 
 作成後、画面下部の「管理者ログイン」から商品登録・編集・削除を行えます。DBの商品は管理者だけが変更できます。MySQLのデータは`pcparts-mysql`ボリュームに保持されます。
 
-既存のMySQLデータベースへ更新を適用する場合は、該当する`database/migrations/`内のSQLを確認してから実行してください。カテゴリ・プラットフォーム変更、デモ注文テーブル、AI利用回数テーブルの移行ファイルがあります。新規データベースには`database/schema.sql`を使うため、移行SQLは実行しません。
+既存のMySQLデータベースへ更新を適用する場合は、該当する`database/migrations/`内のSQLを確認してから実行してください。カテゴリ・プラットフォーム変更、デモ注文・AI利用回数・外部参考商品テーブルの移行ファイルがあります。新規データベースには`database/schema.sql`を使うため、移行SQLは実行しません。
 
 ## 外部APIと購入商品の区別
 
 - AI相談はPHPサーバーからGemini APIを呼び出します。`GEMINI_API_KEY`と`GEMINI_MODEL`をサーバー環境変数に設定してください。
 - 相談時だけ楽天市場APIの商品を相場参考として取得します。楽天の商品は画面に参考情報として表示し、MySQLの商品カタログやカートへ登録しません。
+- 外部参考商品一覧は別の`reference_offers`テーブルから取得します。提供元の表示・短期保存・画像掲載の許諾を確認し、専用フィードを非公開設定へ登録するまでは空欄です。楽天やYahoo!のAPIキーを設定するだけで、この一覧が自動的に埋まる実装ではありません。
 - AIが購入候補として返せる商品IDはMySQLの有効な自社カタログに含まれるものだけです。
 - 楽天市場の相談用参考商品を表示するには`RAKUTEN_APP_ID`と`RAKUTEN_ACCESS_KEY`の両方をサーバーへ設定します。2026-07-01版の商品検索APIでは両方が必須です。楽天の商品情報は楽天の商品ページへリンクする参考表示に限り、自社販売商品の画像・価格・説明として転用しません。[楽天の利用目的に関する公式ヘルプ](https://webservice.faq.rakuten.net/hc/ja/articles/900001974363-%E5%90%84API%E3%81%A7%E5%8F%96%E5%BE%97%E3%81%97%E3%81%9F%E6%83%85%E5%A0%B1%E3%81%AF%E3%81%A9%E3%81%AE%E3%82%88%E3%81%86%E3%81%AA%E7%9B%AE%E7%9A%84%E3%81%A7%E5%88%A9%E7%94%A8%E3%81%A7%E3%81%8D%E3%81%BE%E3%81%99%E3%81%8B)を参照してください。
 - APIキーを`config.js`やブラウザ側のJavaScriptへ入れないでください。

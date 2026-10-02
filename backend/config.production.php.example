@@ -12,4 +12,23 @@ return [
     'GEMINI_MODEL' => 'gemini-2.5-flash',
     'RAKUTEN_APP_ID' => '',
     'RAKUTEN_ACCESS_KEY' => '',
+    // Optional licensed supplier feed for external reference offers. Keep this
+    // disabled until the supplier grants display, temporary cache, and image rights.
+    // The feed returns {"items":[{"id":"...","name":"...","category":"CPU",
+    // "platform":"AMD","price":12345,"imageUrl":"https://...",
+    // "productUrl":"https://..."}],"hasMore":false}, at most 100 per page.
+    'REFERENCE_FEED_SOURCES' => [
+        'your_supplier' => [
+            'enabled' => false,
+            'name' => '許諾済みの提供元',
+            'permissionReference' => '契約・利用許諾の識別子',
+            'rights' => ['display' => false, 'cache' => false, 'images' => false],
+            'feedUrl' => 'https://catalog.example.com/pcparts',
+            'productHosts' => ['shop.example.com'],
+            'imageHosts' => ['images.example.com'],
+            'maxAgeHours' => 24,
+            // 'authHeaderName' => 'Authorization',
+            // 'authHeaderValue' => 'Bearer YOUR_PRIVATE_TOKEN',
+        ],
+    ],
 ];

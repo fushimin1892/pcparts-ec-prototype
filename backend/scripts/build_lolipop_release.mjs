@@ -78,10 +78,14 @@ async function rewritePhpIncludes(dir) {
       continue;
     }
     if (!entry.isFile() || !entry.name.endsWith('.php')) continue;
-    const relative = path.relative(path.dirname(filePath), path.join(privateRoot, 'src', 'bootstrap.php'));
-    const includePath = normalize(relative);
     const source = await readFile(filePath, 'utf8');
-    const updated = source.replace(/require_once\s+__DIR__\s*\.\s*'[^']*src\/bootstrap\.php';/g, `require_once __DIR__ . '/${includePath}';`);
+    let updated = source;
+    for (const name of ['bootstrap.php', 'reference_offers.php']) {
+      const relative = path.relative(path.dirname(filePath), path.join(privateRoot, 'src', name));
+      const includePath = normalize(relative);
+      const escapedName = name.replace(/\./g, '\\.');
+      updated = updated.replace(new RegExp(`require_once\\s+__DIR__\\s*\\.\\s*'[^']*src/${escapedName}';`, 'g'), `require_once __DIR__ . '/${includePath}';`);
+    }
     await writeFile(filePath, updated);
   }
 }
@@ -91,6 +95,6 @@ const denyAll = `Options -Indexes\n<IfModule mod_authz_core.c>\n  Require all de
 await writeFile(path.join(privateRoot, '.htaccess'), denyAll);
 await writeFile(path.join(outputRoot, 'database', '.htaccess'), denyAll);
 await writeFile(path.join(outputRoot, '.htaccess'), `Options -Indexes\n<FilesMatch "^(README-DEPLOY\\.txt|.*\\.sql)$">\n  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n  <IfModule !mod_authz_core.c>\n    Deny from all\n  </IfModule>\n</FilesMatch>\n`);
-await writeFile(path.join(outputRoot, 'README-DEPLOY.txt'), `PC PARTS SHOP - Lolipop release\n\n1. Create a MySQL database in the Lolipop control panel.\n2. Copy _private/config.local.php.example to _private/config.local.php and enter the DB connection values. Keep SESSION_SECURE=true on HTTPS.\n3. Upload every file and folder in this package to the configured path using FTPS.\n4. Import database/schema.sql after selecting the created DB in phpMyAdmin. For 40 sample listings with zero sellable stock, import database/seed_products.sql or run _private/scripts/seed_catalog.php through SSH. These listings can be used only for demo checkout, never for real sales.\n5. Check https://YOUR-DOMAIN${basePath}/api/health.php. It should report database=connected.\n6. Create the admin with _private/scripts/create_admin.php through SSH. Without SSH, generate admin SQL on a trusted local XAMPP PHP install using the project README instructions, then execute it in phpMyAdmin.\n7. Sign in to the admin page and verify products, prices and your own stock before making an item purchasable.\n\nKeep _private/.htaccess and database/.htaccess in place. Do not put DB passwords or API keys in config.js.\nOnly deploy this package to a PHP-enabled hosting plan. XAMPP is for local development, not internet-facing production.\n`);
+await writeFile(path.join(outputRoot, 'README-DEPLOY.txt'), `PC PARTS SHOP - Lolipop release\n\n1. Create a MySQL database in the Lolipop control panel.\n2. Copy _private/config.local.php.example to _private/config.local.php and enter the DB connection values. Keep SESSION_SECURE=true on HTTPS.\n3. Upload every file and folder in this package to the configured path using FTPS.\n4. For a new DB, import database/schema.sql after selecting the DB in phpMyAdmin. For an existing DB, apply database/migrations/20261002_reference_offers.sql once in phpMyAdmin. For 40 sample listings with zero sellable stock, import database/seed_products.sql or run _private/scripts/seed_catalog.php through SSH. These listings can be used only for demo checkout, never for real sales.\n5. Check https://YOUR-DOMAIN${basePath}/api/health.php. It should report database=connected.\n6. Create the admin with _private/scripts/create_admin.php through SSH. Without SSH, generate admin SQL on a trusted local XAMPP PHP install using the project README instructions, then execute it in phpMyAdmin.\n7. Sign in to the admin page and verify products, prices and your own stock before making an item purchasable.\n8. External reference offers use a licensed feed configured only in _private/config.local.php. Keep the example source disabled until display, cache, and image rights are granted. Imported offers link to the supplier and never enter this shop's cart.\n\nKeep _private/.htaccess and database/.htaccess in place. Do not put DB passwords or API keys in config.js.\nOnly deploy this package to a PHP-enabled hosting plan. XAMPP is for local development, not internet-facing production.\n`);
 
 console.log(`Built Lolipop release package: ${outputRoot}`);

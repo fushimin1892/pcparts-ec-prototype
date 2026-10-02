@@ -76,9 +76,10 @@ function httpUrl(value) {
 
 function productImage(product, label = product.shortName || product.name, extraClass = "") {
   const imageUrl = safeHttpUrl(product.imageUrl);
+  const fallback = `<span class="product-image-fallback"${imageUrl ? " hidden" : ""}>${artFor(product.type, label)}<small>商品写真未登録・イメージ図</small></span>`;
   return imageUrl
-    ? `<img class="catalog-product-image ${extraClass}" src="${imageUrl}" alt="${safeText(label)}" loading="lazy" referrerpolicy="no-referrer"><span class="product-image-fallback" hidden>${artFor(product.type, label)}</span>`
-    : artFor(product.type, label);
+    ? `<img class="catalog-product-image ${extraClass}" src="${imageUrl}" alt="${safeText(label)}" loading="lazy" referrerpolicy="no-referrer">${fallback}`
+    : fallback;
 }
 
 document.addEventListener("error", (event) => {
@@ -236,6 +237,11 @@ let serverOrdersLoading = false;
 let serverOrdersError = "";
 let catalogFilter = { category: "すべて", query: "", min: "", max: "", sort: "おすすめ順" };
 let catalogPage = 1;
+let referenceFilter = { category: "すべて", query: "" };
+let referencePage = 1;
+let referenceRequestId = 0;
+const referenceCacheMs = 5 * 60 * 1000;
+let referenceCatalog = { key: "", loading: false, items: [], total: 0, error: "", loadedAt: 0 };
 let adminQuery = "";
 let adminCategory = "すべて";
 let adminPlatform = "すべて";
@@ -251,6 +257,42 @@ const app = document.querySelector("#app");
 const yen = (value) => `¥${Number(value).toLocaleString("ja-JP")}`;
 const findProduct = (id) => products.find((product) => product.id === id);
 const safeText = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+
+function formatCatalogDate(value) {
+  if (!value) return "";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function referenceCatalogKey() {
+  return JSON.stringify([referencePage, referenceFilter.query.trim(), referenceFilter.category]);
+}
+
+async function loadReferenceCatalog(force = false) {
+  if (!apiConfigured) return;
+  const key = referenceCatalogKey();
+  if (!force && referenceCatalog.key === key && (referenceCatalog.loading || Date.now() - referenceCatalog.loadedAt < referenceCacheMs)) return;
+  const requestId = ++referenceRequestId;
+  referenceCatalog = { key, loading: true, items: [], total: 0, error: "", loadedAt: 0 };
+  if (routeInfo().page === "references") renderReferences();
+  const query = new URLSearchParams({ page: String(referencePage), per_page: "24" });
+  if (referenceFilter.query.trim()) query.set("keyword", referenceFilter.query.trim());
+  if (referenceFilter.category !== "すべて") query.set("category", referenceFilter.category);
+  try {
+    const result = await apiRequest(`reference-offers.php?${query.toString()}`);
+    if (requestId !== referenceRequestId) return;
+    referenceCatalog = {
+      key, loading: false,
+      items: Array.isArray(result.items) ? result.items : [],
+      total: Math.max(0, Number(result.total) || 0), error: "", loadedAt: Date.now(),
+    };
+  } catch (error) {
+    if (requestId !== referenceRequestId) return;
+    referenceCatalog = { key, loading: false, items: [], total: 0, error: error.message || "参照商品を読み込めませんでした。", loadedAt: Date.now() };
+  }
+  if (routeInfo().page === "references") renderReferences();
+}
 
 function parseBudget(value) {
   const normalized = String(value || "")
@@ -357,7 +399,7 @@ function toggleFavorite(id) {
 function productCard(product, compact = false) {
   const favored = favorites.includes(product.id);
   const rating = product.reviews ? `★★★★★ <span>${safeText(product.rating)} (${safeText(product.reviews)})</span>` : `<span class="rating-empty">レビュー未登録</span>`;
-  const priceBadge = isDemoOnlyProduct(product) ? `<span class="badge badge--gray">デモ用の仮価格</span>` : Number(product.stock) < 1 ? `<span class="badge badge--warning">在庫未確認</span>` : product.isDemoPrice ? `<span class="badge badge--gray">参考価格</span>` : `<span class="badge">在庫あり</span>`;
+  const priceBadge = isDemoOnlyProduct(product) ? `<span class="badge badge--gray">デモ用の仮価格</span>` : Number(product.stock) < 1 ? `<span class="badge badge--warning">在庫未確認</span>` : product.isDemoPrice ? `<span class="badge badge--gray">参考価格</span>` : `<span class="badge">当店取扱商品</span>`;
   return `<article class="product-card ${compact ? "product-card--compact" : ""}">
     <button class="favorite-toggle ${favored ? "is-active" : ""}" data-action="favorite" data-id="${safeText(product.id)}" aria-label="お気に入り${favored ? "解除" : "追加"}">${favored ? "♥" : "♡"}</button>
     <div class="product-card__image" data-go="detail" data-id="${safeText(product.id)}">${productImage(product)}</div>
@@ -389,6 +431,7 @@ function categoryCards() {
 
 function renderHome() {
   const filtered = getFilteredProducts();
+  const demoCount = filtered.filter((product) => product.isDemoPrice).length;
   const pageSize = 24;
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   catalogPage = Math.min(catalogPage, pageCount);
@@ -401,14 +444,38 @@ function renderHome() {
     <div class="service-strip"><div class="service-item"><span class="service-item__icon">♧</span><div><strong>パーツを一つずつ</strong><small>豊富なパーツを比較して選ぶ</small></div></div><div class="service-item"><span class="service-item__icon">✳</span><div><strong>自由入力で構成相談</strong><small>選択肢にない条件も入力できる</small></div></div><div class="service-item"><span class="service-item__icon">▣</span><div><strong>相性もサポート</strong><small>構成の組み合わせをチェック</small></div></div><div class="service-item"><span class="service-item__icon">↗</span><div><strong>安心のサポート</strong><small>購入前の疑問も気軽に相談</small></div></div></div>
     <div class="home-grid"><div>
       <section id="categories"><div class="section-heading"><div><span class="eyebrow">FIND YOUR PARTS</span><h2>カテゴリから探す</h2></div><button class="text-link" data-category="すべて">すべて見る →</button></div><div class="category-grid">${categoryCards()}</div></section>
-      <section><div class="section-heading"><div><span class="eyebrow">CURATED FOR YOU</span><h2>${catalogFilter.category === "すべて" ? "おすすめパーツ" : catalogFilter.category}</h2><p>人気のPCパーツをピックアップしました。</p></div><button class="text-link" data-action="clear-filter">商品一覧を見る →</button></div>
+      <section><div class="section-heading"><div><span class="eyebrow">SHOP CATALOG</span><h2>${catalogFilter.category === "すべて" ? "当店の登録商品" : catalogFilter.category}</h2><p>当店の販売管理カタログです。${demoCount ? `表示中の${demoCount}件は仮価格のデモ商品です。` : "価格と在庫は商品詳細で確認してください。"}</p></div><button class="text-link" data-go="references">外部の参考商品を見る →</button></div>
         <div class="filter-panel panel"><div class="filter-panel__top"><strong>条件を指定して探す</strong><button class="text-link" data-action="clear-filter">クリア</button></div><form id="filter-form" class="filter-controls"><div class="filter-price"><input class="field" name="min" type="number" min="0" placeholder="下限なし" value="${safeText(catalogFilter.min)}" /><span>〜</span><input class="field" name="max" type="number" min="0" placeholder="上限なし" value="${safeText(catalogFilter.max)}" /></div><select class="select" name="category"><option ${catalogFilter.category === "すべて" ? "selected" : ""}>すべて</option>${categoryItems.map(([name]) => `<option ${catalogFilter.category === name ? "selected" : ""}>${name}</option>`).join("")}</select><input class="field" name="query" placeholder="キーワードで探す" value="${safeText(catalogFilter.query)}" /><button class="button" type="submit">絞り込む</button></form></div>
         <div class="product-toolbar"><div class="result-count">全 <strong>${filtered.length}</strong> 件中 ${filtered.length ? (catalogPage - 1) * pageSize + 1 : 0}〜${Math.min(catalogPage * pageSize, filtered.length)} 件</div><div class="toolbar-actions"><label for="sort-select">並び替え</label><select id="sort-select" class="select"><option>おすすめ順</option><option ${catalogFilter.sort === "価格が安い順" ? "selected" : ""}>価格が安い順</option><option ${catalogFilter.sort === "価格が高い順" ? "selected" : ""}>価格が高い順</option><option ${catalogFilter.sort === "評価が高い順" ? "selected" : ""}>評価が高い順</option></select><div class="view-toggle"><button class="is-active" aria-label="グリッド表示">▦</button><button aria-label="リスト表示">☰</button></div></div></div>
         <div class="product-grid">${mainProducts.length ? mainProducts.map((product) => productCard(product)).join("") : `<div class="empty-state"><div class="empty-state__icon">⌕</div><h2>商品が見つかりません</h2><p>検索条件を変えて、もう一度お試しください。</p><button class="button button--outline" data-action="clear-filter">条件をリセット</button></div>`}</div>
         ${pageCount > 1 ? `<nav class="catalog-pagination" aria-label="商品一覧のページ移動"><button class="button button--outline" data-action="catalog-page" data-page="${catalogPage - 1}" ${catalogPage === 1 ? "disabled" : ""}>← 前へ</button><span>${catalogPage} / ${pageCount} ページ</span><button class="button button--outline" data-action="catalog-page" data-page="${catalogPage + 1}" ${catalogPage === pageCount ? "disabled" : ""}>次へ →</button></nav>` : ""}
       </section>
-    </div><aside class="home-sidebar"><section class="side-card"><div class="side-card__head"><strong>人気ランキング</strong><span class="eyebrow">TOP 3</span></div><div class="side-card__body">${products.slice(0, 3).map((product, index) => `<div class="ranking-item"><span class="ranking-item__number">0${index + 1}</span>${artFor(product.type, product.shortName)}<div class="ranking-item__copy"><strong>${safeText(product.shortName)}</strong><span>${yen(product.price)}</span></div></div>`).join("")}</div></section><section class="promo-tile"><span class="eyebrow">BUILD WITH AI</span><strong>パーツ選びを、もっと楽しく。</strong><span>希望や条件を自由入力して相談</span><button class="text-link" style="padding:0;margin-top:16px;color:#fff" data-go="ai">AI相談をはじめる →</button></section></aside></div>`;
+    </div><aside class="home-sidebar"><section class="side-card"><div class="side-card__head"><strong>登録商品の一例</strong><span class="eyebrow">3 ITEMS</span></div><div class="side-card__body">${products.slice(0, 3).map((product, index) => `<div class="ranking-item"><span class="ranking-item__number">0${index + 1}</span>${artFor(product.type, product.shortName)}<div class="ranking-item__copy"><strong>${safeText(product.shortName)}</strong><span>${yen(product.price)}${product.isDemoPrice ? "（仮）" : ""}</span></div></div>`).join("")}</div></section><section class="promo-tile"><span class="eyebrow">BUILD WITH AI</span><strong>パーツ選びを、もっと楽しく。</strong><span>希望や条件を自由入力して相談</span><button class="text-link" style="padding:0;margin-top:16px;color:#fff" data-go="ai">AI相談をはじめる →</button></section></aside></div><section class="reference-teaser panel"><div><span class="eyebrow">REFERENCE CATALOG</span><h2>外部ショップの参考商品</h2><p>掲載を許可された商品情報を、出典・取得日時とともに表示します。当店の在庫やカートとは別です。</p></div><button class="button button--outline" data-go="references">参考商品を見る →</button></section>`;
   syncHeader();
+}
+
+function referenceOfferCard(offer) {
+  const imageUrl = safeHttpUrl(offer.imageUrl);
+  const productUrl = safeHttpUrl(offer.productUrl);
+  const retrievedAt = formatCatalogDate(offer.retrievedAt);
+  const price = Number(offer.price);
+  const image = imageUrl
+    ? `<img class="catalog-product-image" src="${imageUrl}" alt="${safeText(offer.name || "商品写真")}" loading="lazy" referrerpolicy="no-referrer"><span class="product-image-fallback" hidden><span class="reference-image-placeholder">画像を表示できません</span></span>`
+    : `<span class="product-image-fallback"><span class="reference-image-placeholder">商品画像未提供</span></span>`;
+  return `<article class="reference-offer panel"><div class="reference-offer__image">${image}</div><div class="reference-offer__body"><span class="product-category">${safeText(offer.category || "PCパーツ")}${offer.platform ? ` / ${safeText(offer.platform)}` : ""}</span><h3>${safeText(offer.name || "商品名未登録")}</h3>${offer.maker ? `<p class="reference-offer__maker">メーカー：${safeText(offer.maker)}</p>` : ""}${offer.description ? `<p class="reference-offer__description">${safeText(shortAnswer(offer.description, 120))}</p>` : ""}<strong class="price">${Number.isSafeInteger(price) && price > 0 ? yen(price) : "価格未取得"}</strong><small class="reference-offer__notice">取得時点の参考価格・当店の販売価格ではありません</small><div class="reference-offer__source"><span>情報提供：${safeText(offer.sourceName || "提供元未登録")}</span>${offer.sellerName ? `<span>販売店：${safeText(offer.sellerName)}</span>` : ""}<span>取得日時：${safeText(retrievedAt || "未登録")}</span></div>${productUrl ? `<a class="button button--outline" href="${productUrl}" target="_blank" rel="noopener noreferrer">掲載元の商品ページ ↗</a>` : `<span class="reference-offer__unlinked">掲載元リンク未登録</span>`}</div></article>`;
+}
+
+function renderReferences() {
+  const key = referenceCatalogKey();
+  if (apiConfigured && (referenceCatalog.key !== key || (!referenceCatalog.loading && Date.now() - referenceCatalog.loadedAt >= referenceCacheMs))) void loadReferenceCatalog();
+  const offers = referenceCatalog.items.filter((item) => item && item.referenceOnly === true);
+  const total = referenceCatalog.total;
+  const pageCount = Math.max(1, Math.ceil(total / 24));
+  const first = total ? (referencePage - 1) * 24 + 1 : 0;
+  const last = Math.min(referencePage * 24, total);
+  const emptyTitle = referenceCatalog.error ? "参考商品を読み込めませんでした" : referenceCatalog.loading ? "参考商品を読み込み中です" : referenceFilter.query || referenceFilter.category !== "すべて" ? "条件に合う参考商品がありません" : "掲載許可済みの参考商品はまだありません";
+  const emptyText = referenceCatalog.error ? safeText(referenceCatalog.error) : referenceCatalog.loading ? "出典と価格情報を確認しています。" : referenceFilter.query || referenceFilter.category !== "すべて" ? "検索条件を変えてご確認ください。" : "現在、利用条件を確認した商品データ提供元が接続されていません。接続後に、出典・画像・取得日時のある商品だけを表示します。";
+  app.innerHTML = `${breadcrumb("外部ショップの参考商品", "")}<div class="page-heading"><div><span class="eyebrow">REFERENCE CATALOG</span><h1>外部ショップの参考商品</h1><p>掲載元と取得日時を表示します。外部ショップの商品は当店の在庫・カート・決済の対象外です。</p></div><button class="text-link" data-go="home">← 当店の商品へ</button></div><div class="reference-disclosure panel"><strong>参考情報について</strong><p>価格・在庫・画像は掲載元の情報で、取得後に変更される場合があります。購入条件は掲載元の商品ページで確認してください。</p></div><form id="reference-filter-form" class="filter-controls reference-filter panel"><input class="field" name="query" type="search" placeholder="商品名・メーカー・型番で検索" value="${safeText(referenceFilter.query)}" aria-label="参考商品を検索"><select class="select" name="category" aria-label="カテゴリ"> <option ${referenceFilter.category === "すべて" ? "selected" : ""}>すべて</option>${categoryItems.filter(([name]) => name !== "その他").map(([name]) => `<option ${referenceFilter.category === name ? "selected" : ""}>${safeText(name)}</option>`).join("")}</select><button class="button" type="submit">検索</button><button class="button button--outline" type="button" data-action="reference-clear">クリア</button></form><div class="product-toolbar"><div class="result-count">全 <strong>${total}</strong> 件中 ${first}〜${last} 件</div><span class="reference-only-label">参考商品・当店カート対象外</span></div>${offers.length ? `<div class="reference-grid">${offers.map(referenceOfferCard).join("")}</div>` : `<section class="panel empty-state"><div class="empty-state__icon">⌕</div><h2>${emptyTitle}</h2><p>${emptyText}</p>${referenceCatalog.error ? `<button class="button button--outline" data-action="reference-refresh">再読み込み</button>` : ""}</section>`}${pageCount > 1 ? `<nav class="catalog-pagination" aria-label="参考商品のページ移動"><button class="button button--outline" data-action="reference-page" data-page="${referencePage - 1}" ${referencePage === 1 ? "disabled" : ""}>← 前へ</button><span>${referencePage} / ${pageCount} ページ</span><button class="button button--outline" data-action="reference-page" data-page="${referencePage + 1}" ${referencePage === pageCount ? "disabled" : ""}>次へ →</button></nav>` : ""}`;
 }
 
 function breadcrumb(label, parent = "商品一覧") {
@@ -438,7 +505,16 @@ function renderDetail(id) {
     if (note) note.textContent = "デモ用の仮価格・実際の販売と在庫は未設定";
     const description = document.querySelector(".product-description p");
     if (description) description.textContent = `${product.description} 表示価格はデモ用の仮設定で、実際の購入・発送はできません。`;
+  } else {
+    const note = document.querySelector(".product-info__price .tax-note");
+    if (note) note.textContent = stock > 0 ? `当店登録価格（税込）・登録在庫 ${stock} 点` : "当店登録価格（税込）・在庫確認中";
+    const description = document.querySelector(".product-description p");
+    if (description) description.textContent = `${product.description} 表示価格と在庫は当店の登録情報です。注文前に最新の状況をご確認ください。`;
   }
+  const sourceCaption = document.querySelector(".source-caption");
+  if (sourceCaption) sourceCaption.textContent = `商品情報の参照元：${product.sourceName}`;
+  const sourceAnchor = document.querySelector(".source-product-link");
+  if (sourceAnchor) sourceAnchor.textContent = "商品情報の参照ページ ↗";
   syncHeader();
 }
 
@@ -881,6 +957,7 @@ function renderRoute() {
   const { page, id } = routeInfo();
   if (apiConfigured && ["account", "orders"].includes(page) && !serverOrdersLoaded && !serverOrdersLoading) refreshServerOrders();
   if (page === "home") renderHome();
+  else if (page === "references") renderReferences();
   else if (page === "detail") renderDetail(decodeURIComponent(id));
   else if (page === "cart") renderCart();
   else if (page === "checkout") renderCheckout();
@@ -935,7 +1012,7 @@ function enhanceAdminProductForm() {
 
 function openDrawer() {
   document.querySelector("#mobile-menu-button").setAttribute("aria-expanded", "true");
-  document.querySelector("#drawer-root").innerHTML = `<div class="drawer-backdrop" data-action="close-drawer"><aside class="drawer" aria-label="メニュー"><div class="drawer__head"><a class="brand" href="#/home"><span class="brand__mark"><svg viewBox="0 0 42 42"><path d="M21 2 39 12v18L21 40 3 30V12L21 2Z"/><path d="M3 12 21 22l18-10M21 22v18"/></svg></span><span class="brand__wordmark">PC PARTS <span>SHOP</span><small>BUILD YOUR NEXT PC</small></span></a><button class="drawer-close" data-action="close-drawer" aria-label="メニューを閉じる">×</button></div><div class="drawer__profile">${currentUser ? `<span class="avatar">♙</span><span><strong>${safeText(currentUser.name)} さん</strong><small>${safeText(currentUser.email)}</small></span>` : `<span class="avatar">♙</span><span><strong>ゲストユーザー</strong><small>ログインして購入履歴を管理</small></span>`}</div><nav class="drawer__links"><button data-go="home"><span>⌂</span>ホーム</button><button data-go="ai"><span>✳</span>AI構成相談</button><button data-go="account"><span>♙</span>マイページ</button><button data-go="orders"><span>▣</span>購入履歴</button><button data-go="favorites"><span>♡</span>お気に入り</button><button data-go="profile"><span>⚙</span>会員情報編集</button>${currentUser ? `<button data-action="account-menu" data-id="logout"><span>↪</span>ログアウト</button>` : `<button data-go="auth"><span>↪</span>ログイン</button>`}<button data-go="admin-login"><span>▤</span>管理者ログイン</button></nav><div class="drawer__categories"><strong>カテゴリから探す</strong>${categoryItems.map(([name]) => `<button data-category="${name}">${name}<span>›</span></button>`).join("")}</div></aside></div>`;
+  document.querySelector("#drawer-root").innerHTML = `<div class="drawer-backdrop" data-action="close-drawer"><aside class="drawer" aria-label="メニュー"><div class="drawer__head"><a class="brand" href="#/home"><span class="brand__mark"><svg viewBox="0 0 42 42"><path d="M21 2 39 12v18L21 40 3 30V12L21 2Z"/><path d="M3 12 21 22l18-10M21 22v18"/></svg></span><span class="brand__wordmark">PC PARTS <span>SHOP</span><small>BUILD YOUR NEXT PC</small></span></a><button class="drawer-close" data-action="close-drawer" aria-label="メニューを閉じる">×</button></div><div class="drawer__profile">${currentUser ? `<span class="avatar">♙</span><span><strong>${safeText(currentUser.name)} さん</strong><small>${safeText(currentUser.email)}</small></span>` : `<span class="avatar">♙</span><span><strong>ゲストユーザー</strong><small>ログインして購入履歴を管理</small></span>`}</div><nav class="drawer__links"><button data-go="home"><span>⌂</span>ホーム</button><button data-go="references"><span>↗</span>外部の参考商品</button><button data-go="ai"><span>✳</span>AI構成相談</button><button data-go="account"><span>♙</span>マイページ</button><button data-go="orders"><span>▣</span>購入履歴</button><button data-go="favorites"><span>♡</span>お気に入り</button><button data-go="profile"><span>⚙</span>会員情報編集</button>${currentUser ? `<button data-action="account-menu" data-id="logout"><span>↪</span>ログアウト</button>` : `<button data-go="auth"><span>↪</span>ログイン</button>`}<button data-go="admin-login"><span>▤</span>管理者ログイン</button></nav><div class="drawer__categories"><strong>カテゴリから探す</strong>${categoryItems.map(([name]) => `<button data-category="${name}">${name}<span>›</span></button>`).join("")}</div></aside></div>`;
 }
 
 function closeDrawer() {
@@ -1083,7 +1160,18 @@ document.addEventListener("click", (event) => {
   const nav = event.target.closest("[data-go]");
   if (nav) { event.preventDefault(); document.querySelector("#modal-root").innerHTML = ""; closeDrawer(); go(nav.dataset.go, nav.dataset.id || ""); return; }
   const category = event.target.closest("[data-category]");
-  if (category) { closeDrawer(); catalogFilter.category = category.dataset.category; catalogFilter.query = ""; catalogFilter.min = ""; catalogFilter.max = ""; catalogPage = 1; renderHome(); document.querySelector("#categories")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  if (category) {
+    closeDrawer();
+    catalogFilter.category = category.dataset.category;
+    catalogFilter.query = "";
+    catalogFilter.min = "";
+    catalogFilter.max = "";
+    catalogPage = 1;
+    const scrollToCategories = () => document.querySelector("#categories")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (routeInfo().page === "home") { renderHome(); scrollToCategories(); }
+    else { window.addEventListener("hashchange", scrollToCategories, { once: true }); go("home"); }
+    return;
+  }
   const scroll = event.target.closest("[data-scroll]");
   if (scroll) { document.getElementById(scroll.dataset.scroll)?.scrollIntoView({ behavior: "smooth" }); return; }
   const action = event.target.closest("[data-action]");
@@ -1116,6 +1204,9 @@ document.addEventListener("click", (event) => {
   if (kind === "adjust-budget") { const currentBudget = parseBudget(wizardAnswers.budget) || 200000; wizardAnswers.budget = `${Math.max(100000, currentBudget - 20000).toLocaleString("ja-JP")}円`; renderAiResult(); showToast("予算を抑えた構成を再計算しました"); }
   if (kind === "admin-add") adminProductForm();
   if (kind === "catalog-page") { catalogPage = Math.max(1, Number(action.dataset.page) || 1); renderHome(); document.querySelector(".product-toolbar")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  if (kind === "reference-page") { referencePage = Math.max(1, Number(action.dataset.page) || 1); renderReferences(); document.querySelector(".product-toolbar")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  if (kind === "reference-clear") { referenceFilter = { category: "すべて", query: "" }; referencePage = 1; renderReferences(); }
+  if (kind === "reference-refresh") loadReferenceCatalog(true);
   if (kind === "admin-page") { adminPage = Math.max(1, Number(action.dataset.page) || 1); renderAdmin(); document.querySelector(".admin-toolbar")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   if (kind === "admin-import") adminImportForm();
   if (kind === "admin-import-confirm") {
@@ -1174,6 +1265,9 @@ document.addEventListener("submit", (event) => {
   if (form.id === "filter-form") {
     const data = new FormData(form); catalogFilter.min = data.get("min") || ""; catalogFilter.max = data.get("max") || ""; catalogFilter.category = data.get("category") || "すべて"; catalogFilter.query = data.get("query") || ""; catalogPage = 1; renderHome();
   }
+  if (form.id === "reference-filter-form") {
+    const data = new FormData(form); referenceFilter.query = String(data.get("query") || "").trim(); referenceFilter.category = String(data.get("category") || "すべて"); referencePage = 1; renderReferences();
+  }
   if (form.id === "admin-filter-form") {
     const data = new FormData(form); adminQuery = String(data.get("query") || ""); adminCategory = String(data.get("category") || "すべて"); adminPlatform = String(data.get("platform") || "すべて"); adminListingStatus = String(data.get("listingStatus") || "すべて"); adminPage = 1; renderAdmin();
   }
@@ -1229,6 +1323,12 @@ document.querySelector("#mobile-menu-button").addEventListener("click", () => {
 });
 document.querySelector("#support-button").addEventListener("click", () => openModal("PC構成の相談", `<p>予算や遊びたいゲームが決まっていたら、AI相談からおすすめ構成を試せます。</p><button class='button button--wide' data-go='ai'>AI構成相談をはじめる</button>`));
 window.addEventListener("hashchange", renderRoute);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && routeInfo().page === "references") renderReferences();
+});
+window.setInterval(() => {
+  if (apiConfigured && !document.hidden && routeInfo().page === "references" && !referenceCatalog.loading && Date.now() - referenceCatalog.loadedAt >= referenceCacheMs) void loadReferenceCatalog();
+}, 60 * 1000);
 if (apiConfigured) products.splice(0, products.length);
 renderRoute();
 if (apiConfigured) refreshServerCatalog();

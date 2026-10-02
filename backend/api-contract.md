@@ -8,7 +8,7 @@ PHP APIとMySQLの接続状態を返します。
 
 ## `GET /api/products.php`
 
-MySQLに登録された公開商品を返します。`keyword`、`category`、`platform=Intel|AMD`で絞り込めます。楽天市場APIの商品はこの一覧へ保存しません。管理者セッション中の`GET /api/products.php?include_inactive=1`では非公開の下書きも返します。
+MySQLに登録された公開済みの自社商品を返します。`keyword`、`category`、`platform=Intel|AMD`で絞り込めます。外部ショップの参考商品はこの一覧へ保存しません。管理者セッション中の`GET /api/products.php?include_inactive=1`では非公開の下書きも返します。
 
 管理カテゴリは`CPU`、`GPU`、`マザーボード`、`SSD`、`メモリ`、`CPUクーラー`、`ファン`、`PCケース`、`PC電源`です。モニターなどPCパーツ以外の商品は`その他`に入ります。
 
@@ -25,9 +25,9 @@ MySQLに登録された公開商品を返します。`keyword`、`category`、`p
       "type": "cpu",
       "price": 79800,
       "stock": 0,
-      "imageUrl": "https://example.com/product-image.jpg",
-      "productUrl": "https://example.com/product-page",
-      "sourceName": "情報取得元ショップ名",
+      "imageUrl": "https://your-shop.example.com/images/product-image.jpg",
+      "productUrl": "",
+      "sourceName": "",
       "specs": { "コア / スレッド": "8 / 16", "ソケット": "AM5" },
       "isDemoPrice": true,
       "isActive": true
@@ -35,6 +35,63 @@ MySQLに登録された公開商品を返します。`keyword`、`category`、`p
   ]
 }
 ```
+
+## 外部参考商品 `GET /api/reference-offers.php`
+
+`reference_offers`テーブルにある、取得期限内かつ提供元が有効な商品だけを返します。自社の`products`、AIの購入候補、カート、デモ注文とは分離しています。`keyword`、`category`、`source`、`page`、`per_page`で絞り込めます。`per_page`は1〜100、初期値24です。提供元未設定時は空の一覧を返します。
+
+```json
+{
+  "items": [
+    {
+      "id": "ref-…",
+      "name": "提供元が返した商品名",
+      "category": "CPU",
+      "platform": "AMD",
+      "price": 45000,
+      "imageUrl": "https://images.example.com/item.jpg",
+      "productUrl": "https://shop.example.com/item",
+      "sourceName": "許諾済みの提供元",
+      "sellerName": "販売店名",
+      "retrievedAt": "2026-10-02T00:00:00+00:00",
+      "description": "提供元の説明",
+      "referenceOnly": true
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "perPage": 24,
+  "hasMore": false
+}
+```
+
+`price`は取得時点の提供元の円価格です。購入操作は外部の商品ページへ移動し、当サイトでは決済できません。画像も提供元に掲載許諾がある場合に限って使います。取得日時と販売元を画面に示し、価格・在庫の最新状態は外部ページで確認します。
+
+### `POST /api/admin/reference-offers-sync.php`
+
+管理者セッションが必要です。`{"source":"your_supplier","page":1}`を送ると、非公開設定の`REFERENCE_FEED_SOURCES`に登録された1ページを取得して更新します。応答は`source`、`page`、`fetched`、`inserted`、`updated`、`rejected`、`hasMore`、`nextPage`です。1回最大100件で、`hasMore`に従って管理者側から次ページを呼びます。`source`が未登録・無効、または表示・短期保存・画像掲載の許諾フラグが揃わないと取り込みません。Yahoo!、楽天、Amazon向けのアダプターはありません。
+
+設定例は`backend/config.production.php.example`を参照してください。必要な項目は`name`、`permissionReference`、`rights`（`display`、`cache`、`images`）、HTTPSの`feedUrl`、許可された`productHosts`・`imageHosts`、`maxAgeHours`（1〜168）です。フィードは`page`と`per_page=100`を受け取り、次の形式を返します。
+
+```json
+{
+  "items": [
+    {
+      "id": "provider-unique-id",
+      "name": "商品名",
+      "category": "CPU",
+      "platform": "AMD",
+      "price": 45000,
+      "imageUrl": "https://images.example.com/item.jpg",
+      "productUrl": "https://shop.example.com/item",
+      "description": "商品説明"
+    }
+  ],
+  "hasMore": false
+}
+```
+
+`maxAgeHours=24`の設定例なら取得から24時間、最大でも168時間で参考商品は表示期限を迎えます。これは実装上の期限であり、各提供元の規約上の更新義務を代替しません。許諾を無効にすると、DBに行が残っていても公開APIからは即座に非表示になります。フィード内容や画像の利用許諾、保存期間、更新頻度は提供元ごとに確認してください。現在、許諾済みフィードは設定されていないため0件です。
 
 ## 管理者
 
@@ -56,11 +113,11 @@ Cookieセッションを使う管理者ログイン状態の確認・終了で�
 
 ### `POST /api/admin/products/bulk-import.php`
 
-管理者セッション中に最大1,000件をまとめて下書き登録・更新します。JSON本文は`{ "items": [商品データ...] }`です。取得価格・画像URL・取得元商品URLを必須とし、商品IDで既存の下書きを更新するため、同じ出力JSONを再取込しても重複しません。既に公開済み、在庫登録済み、または仮価格を解除した商品は上書きしません。取り込み時は送信された`stock`や`isActive`に関係なく、在庫0・仮価格・非公開にします。応答は`imported`、`inserted`、`updated`、`skipped`件数を返します。
+管理者セッション中に最大1,000件をまとめて自社販売商品の下書きへ登録・更新する既存機能です。JSON本文は`{ "items": [商品データ...] }`です。商品IDで既存の下書きを更新するため、同じJSONを再取込しても重複しません。既に公開済み、在庫登録済み、または仮価格を解除した商品は上書きしません。取り込み時は送信された`stock`や`isActive`に関係なく、在庫0・仮価格・非公開にします。応答は`imported`、`inserted`、`updated`、`skipped`件数を返します。
 
-管理者は取得元・商品名・カテゴリ・画像・価格を確認した後、自社の販売価格と在庫へ変更して公開します。公開前の下書きは商品一覧・カート・AIの購入候補に表示されません。GitHub Pagesだけの画面デモは現在のブラウザへ保存され、チーム共有にはPHP / MySQL API接続が必要です。
+管理者は商品名・カテゴリ・画像・価格を確認した後、自社の販売価格と在庫へ変更して公開します。公開前の下書きは商品一覧・カート・AIの購入候補に表示されません。GitHub Pagesだけの画面デモは現在のブラウザへ保存され、チーム共有にはPHP / MySQL API接続が必要です。
 
-`node backend/scripts/import_marketplace_catalog.mjs --target=1000 --output=marketplace-products.json`を実行すると、Yahoo!ショッピング、楽天市場、および任意のAmazon.co.jp Creators APIから検索結果を取得し、管理画面へ読み込む候補JSONを作ります。Yahooと楽天のキーはこのスクリプトの実行環境だけへ設定してください。外部APIの価格・説明・在庫は取得時点の参考値であり、自社販売価格や在庫の証明ではありません。画像URLと商品ページURLは各APIの戻り値を保持します。Amazonはアソシエイト/Creators APIの認証設定があるときだけ検索します。
+旧試作用スクリプト`backend/scripts/import_marketplace_catalog.mjs`は外部APIの検索結果JSONを生成しますが、参考商品一覧には接続していません。外部サイトの価格・説明・画像を自社商品として公開する根拠にはなりません。外部参考商品の表示には専用の`reference_offers`経路と、提供元による表示・短期保存・画像掲載の許諾を使います。
 
 ## `POST /api/ai/consult.php`
 
