@@ -25,7 +25,7 @@ node backend/scripts/import_marketplace_catalog.mjs --target=1000 --output=marke
 
 その後、管理者としてログインし「JSON一括登録」から生成ファイルを選び、件数・カテゴリ・画像・販売ページを確認して登録します。対応カテゴリは9種で、カテゴリごとに件数を配分します。検索結果が不足するカテゴリは目標より少なくなることがあります。Yahoo APIは1クエリー/秒で取得し、楽天APIは1回最大30件のページ検索を使います。[Yahoo公式API仕様](https://developer.yahoo.co.jp/webapi/shopping/v3/itemsearch.html)は画像の600px取得に対応し、楽天公式APIは画像あり商品の絞り込みと商品ページ・画像URLを返します。[楽天公式API仕様](https://webservice.rakuten.co.jp/index.php/documentation/ichiba-item-search)
 
-商品説明、価格、在庫はAPIを取得した時点の情報です。取り込んだ商品は「参考価格」かつ在庫0で登録するため、管理者が説明・価格・自社在庫を確認して在庫数を設定するまではカートに入れられません。PC工房、ツクモ、Arkなどのショップ名はAPI応答に含まれる場合そのまま保存し、販売元リンクから個別の商品ページを確認できます。直接APIが提供されない店舗ページを大量巡回して価格や画像を集める処理はしません。
+商品説明、価格、在庫はAPIを取得した時点の情報です。取り込んだ商品は「参考価格」・在庫0・非公開の下書きで登録します。管理者が説明・販売価格・自社在庫・画像を確認し、公開へ切り替えるまでは商品一覧やカートに表示されません。PC工房、ツクモ、Arkなどのショップ名はAPI応答に含まれる場合そのまま保存し、販売元リンクから個別の商品ページを確認できます。直接APIが提供されない店舗ページを大量巡回して価格や画像を集める処理はしません。
 
 Amazon商品は任意でAmazon.co.jp Creators APIから検索できます。Amazonアソシエイト登録後にCreators APIを登録し、クライアントID / シークレット / Partner Tagを設定してください。SearchItems APIは1回最大10件を返します。API資格がない場合はAmazonを省略します。
 
@@ -47,7 +47,7 @@ XAMPP Control PanelでApacheとMySQLを起動し、Node.jsが使える状態で�
 node backend/scripts/build_lolipop_release.mjs --base-path=/pcparts
 ```
 
-`backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーしてXAMPP用DB設定を入れ、同フォルダに置きます（初期状態のユーザーは`root`、パスワードは空欄です）。生成パッケージの中身を`C:\xampp\htdocs\pcparts`へコピーし、phpMyAdminで`pc_parts_shop`データベースを作成してから`database/schema.sql`をインポートします。管理者PowerShellで以下を実行します。
+`backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーしてXAMPP用DB設定を入れ、同フォルダに置きます（初期状態のユーザーは`root`、パスワードは空欄です）。生成パッケージの中身を`C:\xampp\htdocs\pcparts`へコピーし、phpMyAdminで`pc_parts_shop`データベースを作成してから`database/schema.sql`をインポートします。40件の画面確認用商品は`database/seed_products.sql`をphpMyAdminからインポートするか、次のPHPスクリプトで登録します。両方実行しても商品IDで重複登録はされません。
 
 ```powershell
 C:\xampp\php\php.exe C:\xampp\htdocs\pcparts\_private\scripts\seed_catalog.php
@@ -57,6 +57,8 @@ C:\xampp\php\php.exe C:\xampp\htdocs\pcparts\_private\scripts\create_admin.php a
 
 ブラウザで`http://localhost/pcparts/`を開きます。`backend/config.local.php`や`backend/dist-lolipop/_private/config.local.php`に設定したキーとパスワードはGitへ登録しないでください。XAMPPは開発用で、インターネットへ公開する本番サーバーには使いません。
 
+初期40件の価格は仮値で、MySQL上の在庫は0です。商品一覧の表示確認には使えますが、購入可能な商品として公開するには管理画面で自社の価格・在庫・画像を確認して登録してください。
+
 ### ロリポップへ本番配置
 
 ロリポップでPHPとMySQLが使えるプラン・ドメインを用意し、ユーザー専用ページに表示されるDB接続情報を使います。MySQLはライトプラン以上で利用でき、SSHはスタンダードプラン以上で利用できます。PHP 8.3〜8.5、MySQL 8.4の対応状況は[公式サーバー仕様](https://lolipop.jp/service/server-spec/)に掲載されています。
@@ -64,7 +66,7 @@ C:\xampp\php\php.exe C:\xampp\htdocs\pcparts\_private\scripts\create_admin.php a
 1. ロリポップのユーザー専用ページでMySQLデータベースを作成します。既存のサイトを置き換えないよう、公開ディレクトリ内の`pcparts`サブフォルダへ配置する例では`node backend/scripts/build_lolipop_release.mjs --base-path=/pcparts`を実行します。ドメイン直下に配置する場合は`node backend/scripts/build_lolipop_release.mjs`を実行します。
 2. `backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーし、ロリポップのDBホスト名・DB名・ユーザー名・パスワードを記入します。HTTPS公開なので`SESSION_SECURE`は`true`のままにします。必要ならGemini / 楽天のAPIキーもここへ入れます。
 3. `backend/dist-lolipop`の中身を、FTPSで配置先へアップロードします。サブフォルダ配置なら公開ディレクトリ内に`pcparts`を作り、その中へ入れます。ロリポップ公式マニュアルはFTPSとFTPアップロードを案内しています。[FTPS設定](https://lolipop.jp/manual/hp/ftp-set/)、[アップロード方法](https://lolipop.jp/manual/user/ftp2-04/)。`_private/.htaccess`と`database/.htaccess`も必ず一緒にアップロードしてください。パッケージを再生成しても既存の`_private/config.local.php`は保持されます。
-4. phpMyAdminで作成したDBを選択し、`database/schema.sql`をインポートします。SSHが使えるプランなら`_private/scripts/seed_catalog.php`で初期カタログを入れ、`ADMIN_PASSWORD`を設定して`_private/scripts/create_admin.php`を実行します。SSHがないプランではXAMPPのPHPで`backend/scripts/generate_admin_sql.php`から管理者登録SQLを生成して、phpMyAdminで実行できます。
+4. phpMyAdminで作成したDBを選択し、`database/schema.sql`をインポートします。続いて40件の画面確認用商品を表示したい場合は`database/seed_products.sql`をインポートします。このSQLは仮価格・在庫0で登録するため、デモ注文には使えません。SSHが使える場合は代わりに`_private/scripts/seed_catalog.php`でも登録できます。管理者はSSHから`ADMIN_PASSWORD`を設定して`_private/scripts/create_admin.php`を実行するか、ローカルXAMPPのPHPで`backend/scripts/generate_admin_sql.php`から管理者登録SQLを作り、phpMyAdminで実行します。管理者パスワードや生成したSQLをGitや公開フォルダへ置かないでください。
 5. `https://あなたのドメイン/pcparts/api/health.php`が`database: connected`を返すことを確認し、管理者画面へログインします。
 
 DB接続情報やAPIキーは`_private/config.local.php`だけに置きます。公開画面の`config.js`へ書かないでください。ユーザー専用ページのFTP / DB情報はチャットへ貼らず、生成した`backend/dist-lolipop/_private/config.local.php`へ設定してください。
@@ -89,7 +91,7 @@ docker compose -f backend/docker-compose.yml exec -e DB_HOST=db -e ADMIN_PASSWOR
 
 作成後、画面下部の「管理者ログイン」から商品登録・編集・削除を行えます。DBの商品は管理者だけが変更できます。MySQLのデータは`pcparts-mysql`ボリュームに保持されます。
 
-既存のMySQLデータベースへこの更新を適用する場合は、アプリを更新する前に`database/migrations/20261001_categories_platform.sql`を一度だけ実行してください。新規データベースには`database/schema.sql`を使うため、この移行SQLは実行しません。
+既存のMySQLデータベースへ更新を適用する場合は、該当する`database/migrations/`内のSQLを確認してから実行してください。カテゴリ・プラットフォーム変更、デモ注文テーブル、AI利用回数テーブルの移行ファイルがあります。新規データベースには`database/schema.sql`を使うため、移行SQLは実行しません。
 
 ## 外部APIと購入商品の区別
 
@@ -105,7 +107,7 @@ GitHub Pages用`config.js`の`PC_PARTS_API_BASE_URL`は空欄のままです。P
 
 `.github/workflows/deploy-pages.yml`は`main`へのpushで静的フロントをGitHub Pagesへ公開します。Pagesは静的ファイルの配信先で、PHPプロセスやMySQLは実行しません。Lolipop用パッケージは`node backend/scripts/build_lolipop_release.mjs`で作成します。XAMPPもローカル開発にのみ使います。[XAMPP公式FAQ](https://www.apachefriends.org/faq_windows)も、本番用ではなく開発環境用と説明しています。
 
-今の注文確定はデモ処理です。注文・在庫引当・決済を本番利用する前に、PHP側の注文APIと決済サービスを実装し、DBトランザクションで在庫と金額を再確認してください。
+今の注文確定はデモ処理です。PHP接続時のデモ注文はMySQLへ保存し、サーバーが登録商品の価格・在庫を再確認しますが、在庫引当や実際の請求・発送はしません。実販売を始める前に、会員認証を伴う実注文API、在庫引当、決済サービス、配送・返品の運用を実装する必要があります。
 
 チェックアウト画面ではクレジット / デビットカード、PayPay、楽天ペイ、交通系電子マネー、コンビニ払いの画面フローを試せます。外部決済サービスへの接続、請求、実店舗での支払いはありません。カード欄には画面に案内されたテスト値（番号`4242 4242 4242 4242`、期限`12/30`、コード`123`）だけを入力してください。カード情報は保存・送信しません。コンビニ払いを選ぶと、画面確認専用の払込番号と期限を表示します。
 

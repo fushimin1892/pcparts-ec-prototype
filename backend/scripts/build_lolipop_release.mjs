@@ -48,6 +48,26 @@ const schemaForExistingDb = schema.replace(/^CREATE DATABASE IF NOT EXISTS pc_pa
 if (schemaForExistingDb === schema) throw new Error('Could not prepare the schema for the hosting provider database.');
 await writeFile(schemaPath, `-- Import this file after selecting the database in phpMyAdmin.\n${schemaForExistingDb}`);
 
+// Provide a phpMyAdmin import for hosts without SSH access. Every bundled
+// price is a sample value, so these records must have zero sellable stock.
+const seedItems = JSON.parse(await readFile(path.join(projectRoot, 'database', 'seed_products.json'), 'utf8'));
+if (!Array.isArray(seedItems) || seedItems.some((item) =>
+  !item || !/^[A-Za-z0-9._-]{1,100}$/.test(String(item.id || '')) ||
+  !Number.isSafeInteger(item.price) || item.price < 0
+)) throw new Error('The bundled seed catalog contains an invalid product ID or price.');
+const sqlText = (value) => value == null ? 'NULL' : String(value) === '' ? "''" : `CONVERT(0x${Buffer.from(String(value), 'utf8').toString('hex')} USING utf8mb4)`;
+const seedRows = seedItems.map((item) => `(${[
+  sqlText(item.id), sqlText(item.name), sqlText(item.shortName ?? item.name),
+  sqlText(item.maker ?? ''), sqlText(item.category), sqlText(item.platform ?? ''),
+  sqlText(item.type ?? 'other'), Number(item.price), sqlText(item.imageUrl ?? null),
+  sqlText(item.productUrl ?? null), sqlText(item.manufacturerUrl ?? null),
+  sqlText(JSON.stringify(item.specs ?? {})), 1,
+  0, sqlText(item.description ?? ''), 1,
+].join(', ')})`);
+await writeFile(path.join(outputRoot, 'database', 'seed_products.sql'),
+  `-- Import only after schema.sql. Bundled prices are examples and stock is zero.\n` +
+  `INSERT IGNORE INTO products (catalog_key, name, short_name, maker, category, platform, product_type, price, image_url, product_url, manufacturer_url, specs, is_demo_price, stock, description, is_active) VALUES\n${seedRows.join(',\n')};\n`);
+
 const apiRoot = path.join(outputRoot, 'api');
 const normalize = (value) => value.split(path.sep).join('/');
 async function rewritePhpIncludes(dir) {
@@ -71,6 +91,6 @@ const denyAll = `Options -Indexes\n<IfModule mod_authz_core.c>\n  Require all de
 await writeFile(path.join(privateRoot, '.htaccess'), denyAll);
 await writeFile(path.join(outputRoot, 'database', '.htaccess'), denyAll);
 await writeFile(path.join(outputRoot, '.htaccess'), `Options -Indexes\n<Files "README-DEPLOY.txt">\n  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n  <IfModule !mod_authz_core.c>\n    Deny from all\n  </IfModule>\n</Files>\n`);
-await writeFile(path.join(outputRoot, 'README-DEPLOY.txt'), `PC PARTS SHOP - Lolipop release\n\n1. Create a MySQL database in the Lolipop control panel.\n2. Copy _private/config.local.php.example to _private/config.local.php and enter the DB connection values. Keep SESSION_SECURE=true on HTTPS.\n3. Import database/schema.sql after selecting the created DB in phpMyAdmin.\n4. Upload every file and folder in this package to the configured path using FTPS.\n5. Check https://YOUR-DOMAIN${basePath}/api/health.php. It should report database=connected.\n6. With SSH, run _private/scripts/seed_catalog.php and create the admin using _private/scripts/create_admin.php. Without SSH, generate admin SQL on a trusted local XAMPP PHP install using the project README instructions, then execute it in phpMyAdmin.\n7. Sign in to the admin page and register real products.\n\nKeep _private/.htaccess and database/.htaccess in place. Do not put DB passwords or API keys in config.js.\nOnly deploy this package to a PHP-enabled hosting plan. XAMPP is for local development, not internet-facing production.\n`);
+await writeFile(path.join(outputRoot, 'README-DEPLOY.txt'), `PC PARTS SHOP - Lolipop release\n\n1. Create a MySQL database in the Lolipop control panel.\n2. Copy _private/config.local.php.example to _private/config.local.php and enter the DB connection values. Keep SESSION_SECURE=true on HTTPS.\n3. Upload every file and folder in this package to the configured path using FTPS.\n4. Import database/schema.sql after selecting the created DB in phpMyAdmin. For 40 non-purchasable sample listings, import database/seed_products.sql or run _private/scripts/seed_catalog.php through SSH.\n5. Check https://YOUR-DOMAIN${basePath}/api/health.php. It should report database=connected.\n6. Create the admin with _private/scripts/create_admin.php through SSH. Without SSH, generate admin SQL on a trusted local XAMPP PHP install using the project README instructions, then execute it in phpMyAdmin.\n7. Sign in to the admin page and verify products, prices and your own stock before making an item purchasable.\n\nKeep _private/.htaccess and database/.htaccess in place. Do not put DB passwords or API keys in config.js.\nOnly deploy this package to a PHP-enabled hosting plan. XAMPP is for local development, not internet-facing production.\n`);
 
 console.log(`Built Lolipop release package: ${outputRoot}`);
