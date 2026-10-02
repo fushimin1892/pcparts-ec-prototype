@@ -116,7 +116,7 @@ try {
 
     $keys = array_keys($quantities);
     $placeholders = implode(',', array_fill(0, count($keys), '?'));
-    $productStmt = $pdo->prepare("SELECT catalog_key, name, price, stock FROM products WHERE catalog_key IN ($placeholders) AND is_active = TRUE AND is_demo_price = FALSE AND price > 0 AND stock > 0 FOR UPDATE");
+    $productStmt = $pdo->prepare("SELECT catalog_key, name, price, stock, is_demo_price FROM products WHERE catalog_key IN ($placeholders) AND is_active = TRUE AND price > 0 AND (is_demo_price = TRUE OR stock > 0) FOR UPDATE");
     $productStmt->execute($keys);
     $productsByKey = [];
     foreach ($productStmt->fetchAll() as $product) $productsByKey[$product['catalog_key']] = $product;
@@ -124,7 +124,7 @@ try {
     $subtotal = 0;
     foreach ($quantities as $key => $quantity) {
         $product = $productsByKey[$key] ?? null;
-        if (!$product || (int)$product['stock'] < $quantity) {
+        if (!$product || (!(bool)$product['is_demo_price'] && (int)$product['stock'] < $quantity)) {
             $pdo->rollBack();
             json_response(['error' => '販売中の商品と在庫を確認してください。'], 409);
         }

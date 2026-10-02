@@ -66,7 +66,7 @@ C:\xampp\php\php.exe C:\xampp\htdocs\pcparts\_private\scripts\create_admin.php a
 1. ロリポップのユーザー専用ページでMySQLデータベースを作成します。既存のサイトを置き換えないよう、公開ディレクトリ内の`pcparts`サブフォルダへ配置する例では`node backend/scripts/build_lolipop_release.mjs --base-path=/pcparts`を実行します。ドメイン直下に配置する場合は`node backend/scripts/build_lolipop_release.mjs`を実行します。
 2. `backend/dist-lolipop/_private/config.local.php.example`を`config.local.php`へコピーし、ロリポップのDBホスト名・DB名・ユーザー名・パスワードを記入します。HTTPS公開なので`SESSION_SECURE`は`true`のままにします。必要ならGemini / 楽天のAPIキーもここへ入れます。
 3. `backend/dist-lolipop`の中身を、FTPSで配置先へアップロードします。サブフォルダ配置なら公開ディレクトリ内に`pcparts`を作り、その中へ入れます。ロリポップ公式マニュアルはFTPSとFTPアップロードを案内しています。[FTPS設定](https://lolipop.jp/manual/hp/ftp-set/)、[アップロード方法](https://lolipop.jp/manual/user/ftp2-04/)。`_private/.htaccess`と`database/.htaccess`も必ず一緒にアップロードしてください。パッケージを再生成しても既存の`_private/config.local.php`は保持されます。
-4. phpMyAdminで作成したDBを選択し、`database/schema.sql`をインポートします。続いて40件の画面確認用商品を表示したい場合は`database/seed_products.sql`をインポートします。このSQLは仮価格・在庫0で登録するため、デモ注文には使えません。SSHが使える場合は代わりに`_private/scripts/seed_catalog.php`でも登録できます。管理者はSSHから`ADMIN_PASSWORD`を設定して`_private/scripts/create_admin.php`を実行するか、ローカルXAMPPのPHPで`backend/scripts/generate_admin_sql.php`から管理者登録SQLを作り、phpMyAdminで実行します。管理者パスワードや生成したSQLをGitや公開フォルダへ置かないでください。
+4. phpMyAdminで作成したDBを選択し、`database/schema.sql`をインポートします。続いて40件の画面確認用商品を表示したい場合は`database/seed_products.sql`をインポートします。このSQLは仮価格・在庫0で登録し、画面上のデモ注文だけに利用できます。実販売には利用できません。SSHが使える場合は代わりに`_private/scripts/seed_catalog.php`でも登録できます。管理者はSSHから`ADMIN_PASSWORD`を設定して`_private/scripts/create_admin.php`を実行するか、ローカルXAMPPのPHPで`backend/scripts/generate_admin_sql.php`から管理者登録SQLを作り、phpMyAdminで実行します。管理者パスワードや生成したSQLをGitや公開フォルダへ置かないでください。
 5. `https://あなたのドメイン/pcparts/api/health.php`が`database: connected`を返すことを確認し、管理者画面へログインします。
 
 DB接続情報やAPIキーは`_private/config.local.php`だけに置きます。公開画面の`config.js`へ書かないでください。ユーザー専用ページのFTP / DB情報はチャットへ貼らず、生成した`backend/dist-lolipop/_private/config.local.php`へ設定してください。
@@ -107,7 +107,7 @@ GitHub Pages用`config.js`の`PC_PARTS_API_BASE_URL`は空欄のままです。P
 
 `.github/workflows/deploy-pages.yml`は`main`へのpushで静的フロントをGitHub Pagesへ公開します。Pagesは静的ファイルの配信先で、PHPプロセスやMySQLは実行しません。Lolipop用パッケージは`node backend/scripts/build_lolipop_release.mjs`で作成します。XAMPPもローカル開発にのみ使います。[XAMPP公式FAQ](https://www.apachefriends.org/faq_windows)も、本番用ではなく開発環境用と説明しています。
 
-今の注文確定はデモ処理です。PHP接続時のデモ注文はMySQLへ保存し、サーバーが登録商品の価格・在庫を再確認しますが、在庫引当や実際の請求・発送はしません。実販売を始める前に、会員認証を伴う実注文API、在庫引当、決済サービス、配送・返品の運用を実装する必要があります。
+今の注文確定はデモ処理です。PHP接続時のデモ注文はMySQLへ保存し、サーバーが登録商品の価格を再確認します。販売価格を設定した商品は在庫も確認します。画面確認用の仮価格商品は在庫0でもデモ注文を作れますが、在庫引当や実際の請求・発送はしません。実販売を始める前に、会員認証を伴う実注文API、在庫引当、決済サービス、配送・返品の運用を実装する必要があります。
 
 チェックアウト画面ではクレジット / デビットカード、PayPay、楽天ペイ、交通系電子マネー、コンビニ払いの画面フローを試せます。外部決済サービスへの接続、請求、実店舗での支払いはありません。カード欄には画面に案内されたテスト値（番号`4242 4242 4242 4242`、期限`12/30`、コード`123`）だけを入力してください。カード情報は保存・送信しません。コンビニ払いを選ぶと、画面確認専用の払込番号と期限を表示します。
 

@@ -1,5 +1,6 @@
 backend/.env
 backend/config.local.php
+backend/.private/
 backend/dist-lolipop/
 marketplace-products.json
 backend/vendor/

@@ -333,16 +333,18 @@ function cartEntries() {
 
 function cartQuantity() { return cartEntries().reduce((sum, entry) => sum + entry.quantity, 0); }
 function cartSubtotal() { return cartEntries().reduce((sum, entry) => sum + entry.product.price * entry.quantity, 0); }
+function isDemoOnlyProduct(product) { return apiConfigured && Boolean(product?.isDemoPrice) && Number(product?.price) > 0; }
+function cartCapacity(product) { return isDemoOnlyProduct(product) ? 10 : Math.max(0, Number(product?.stock) || 0); }
 function persistCart() { storage.set("pcparts-cart", cart); syncHeader(); }
 function syncHeader() { document.querySelector("#cart-count").textContent = cartQuantity(); }
 
 function addToCart(id, quantity = 1) {
   const product = findProduct(id);
   if (!product) return;
-  if (Number(product.stock) < (Number(cart[id]) || 0) + quantity) { showToast("管理画面で在庫を確認してからカートに追加してください"); return; }
+  if (cartCapacity(product) < (Number(cart[id]) || 0) + quantity) { showToast("デモ上限または在庫数を超えています"); return; }
   cart[id] = (Number(cart[id]) || 0) + quantity;
   persistCart();
-  showToast(`${product.shortName} をカートに追加しました`);
+  showToast(`${product.shortName} を${isDemoOnlyProduct(product) ? "デモカート" : "カート"}に追加しました`);
 }
 
 function toggleFavorite(id) {
@@ -355,13 +357,13 @@ function toggleFavorite(id) {
 function productCard(product, compact = false) {
   const favored = favorites.includes(product.id);
   const rating = product.reviews ? `★★★★★ <span>${safeText(product.rating)} (${safeText(product.reviews)})</span>` : `<span class="rating-empty">レビュー未登録</span>`;
-  const priceBadge = Number(product.stock) < 1 ? `<span class="badge badge--warning">在庫未確認</span>` : product.isDemoPrice ? `<span class="badge badge--gray">参考価格</span>` : `<span class="badge">在庫あり</span>`;
+  const priceBadge = isDemoOnlyProduct(product) ? `<span class="badge badge--gray">デモ用の仮価格</span>` : Number(product.stock) < 1 ? `<span class="badge badge--warning">在庫未確認</span>` : product.isDemoPrice ? `<span class="badge badge--gray">参考価格</span>` : `<span class="badge">在庫あり</span>`;
   return `<article class="product-card ${compact ? "product-card--compact" : ""}">
     <button class="favorite-toggle ${favored ? "is-active" : ""}" data-action="favorite" data-id="${safeText(product.id)}" aria-label="お気に入り${favored ? "解除" : "追加"}">${favored ? "♥" : "♡"}</button>
     <div class="product-card__image" data-go="detail" data-id="${safeText(product.id)}">${productImage(product)}</div>
     <div class="product-card__body"><div class="product-meta"><span class="product-category">${safeText(product.category)} / ${safeText(product.maker)}</span>${priceBadge}</div>
       <h3><a href="#/detail/${encodeURIComponent(product.id)}">${safeText(product.name)}</a></h3><div class="product-rating">${rating}</div>
-      <div class="product-card__bottom"><div class="price">${yen(product.price)}<small>${product.isDemoPrice ? "参考" : "税込"}</small></div>${Number(product.stock) > 0 ? `<button class="button" data-action="add-cart" data-id="${safeText(product.id)}">カートに追加</button>` : `<button class="button" disabled>在庫確認中</button>`}</div>
+      <div class="product-card__bottom"><div class="price">${yen(product.price)}<small>${product.isDemoPrice ? "仮価格" : "税込"}</small></div>${cartCapacity(product) > 0 ? `<button class="button" data-action="add-cart" data-id="${safeText(product.id)}">${isDemoOnlyProduct(product) ? "デモカートに追加" : "カートに追加"}</button>` : `<button class="button" disabled>在庫確認中</button>`}</div>
     </div>
   </article>`;
 }
@@ -405,7 +407,7 @@ function renderHome() {
         <div class="product-grid">${mainProducts.length ? mainProducts.map((product) => productCard(product)).join("") : `<div class="empty-state"><div class="empty-state__icon">⌕</div><h2>商品が見つかりません</h2><p>検索条件を変えて、もう一度お試しください。</p><button class="button button--outline" data-action="clear-filter">条件をリセット</button></div>`}</div>
         ${pageCount > 1 ? `<nav class="catalog-pagination" aria-label="商品一覧のページ移動"><button class="button button--outline" data-action="catalog-page" data-page="${catalogPage - 1}" ${catalogPage === 1 ? "disabled" : ""}>← 前へ</button><span>${catalogPage} / ${pageCount} ページ</span><button class="button button--outline" data-action="catalog-page" data-page="${catalogPage + 1}" ${catalogPage === pageCount ? "disabled" : ""}>次へ →</button></nav>` : ""}
       </section>
-    </div><aside class="home-sidebar"><section class="side-card"><div class="side-card__head"><strong>人気ランキング</strong><span class="eyebrow">TOP 3</span></div><div class="side-card__body">${[products[0], products[1], products[5]].map((product, index) => `<div class="ranking-item"><span class="ranking-item__number">0${index + 1}</span>${artFor(product.type, product.shortName)}<div class="ranking-item__copy"><strong>${product.shortName}</strong><span>${yen(product.price)}</span></div></div>`).join("")}</div></section><section class="promo-tile"><span class="eyebrow">BUILD WITH AI</span><strong>パーツ選びを、もっと楽しく。</strong><span>希望や条件を自由入力して相談</span><button class="text-link" style="padding:0;margin-top:16px;color:#fff" data-go="ai">AI相談をはじめる →</button></section></aside></div>`;
+    </div><aside class="home-sidebar"><section class="side-card"><div class="side-card__head"><strong>人気ランキング</strong><span class="eyebrow">TOP 3</span></div><div class="side-card__body">${products.slice(0, 3).map((product, index) => `<div class="ranking-item"><span class="ranking-item__number">0${index + 1}</span>${artFor(product.type, product.shortName)}<div class="ranking-item__copy"><strong>${product.shortName}</strong><span>${yen(product.price)}</span></div></div>`).join("")}</div></section><section class="promo-tile"><span class="eyebrow">BUILD WITH AI</span><strong>パーツ選びを、もっと楽しく。</strong><span>希望や条件を自由入力して相談</span><button class="text-link" style="padding:0;margin-top:16px;color:#fff" data-go="ai">AI相談をはじめる →</button></section></aside></div>`;
   syncHeader();
 }
 
@@ -414,17 +416,29 @@ function breadcrumb(label, parent = "商品一覧") {
 }
 
 function renderDetail(id) {
-  const product = findProduct(id) || products[0];
-  if (!product) { app.innerHTML = `<div class="panel empty-state"><h2>商品がありません</h2><button class="button" data-go="home">商品一覧へ</button></div>`; return; }
+  const product = findProduct(id);
+  if (!product) {
+    app.innerHTML = `${breadcrumb("商品情報")}<div class="panel empty-state"><h2>${apiConfigured && !serverCatalogLoaded ? "商品を読み込み中です" : "商品が見つかりません"}</h2><p>商品一覧をご確認ください。</p><button class="button button--outline" data-go="home">商品一覧へ戻る</button></div>`;
+    return;
+  }
   detailQuantity = 1;
   const rating = product.reviews ? `★★★★★ <span>${safeText(product.rating)}（${safeText(product.reviews)}件のレビュー）</span>` : `<span class="rating-empty">レビュー未登録</span>`;
   const specs = Object.entries(product.specs || {}).map(([key, value]) => `<tr><th>${safeText(key)}</th><td>${safeText(value)}</td></tr>`).join("");
   const sourceLink = safeHttpUrl(product.productUrl);
   const stock = Number(product.stock) || 0;
-  const purchaseButtons = stock > 0
+  const demoOnly = isDemoOnlyProduct(product);
+  const purchaseButtons = demoOnly
+    ? `<div class="quantity-row"><span style="font-size:11px">デモ数量（上限10点）</span><div class="quantity-stepper"><button data-action="detail-quantity" data-delta="-1">−</button><span id="detail-quantity">1</span><button data-action="detail-quantity" data-delta="1">＋</button></div></div><button class="button" data-action="add-detail" data-id="${safeText(product.id)}">デモカートに追加</button><button class="button button--dark" data-action="buy-now" data-id="${safeText(product.id)}">デモ決済を試す</button>`
+    : stock > 0
     ? `<div class="quantity-row"><span style="font-size:11px">数量（在庫 ${stock} 点）</span><div class="quantity-stepper"><button data-action="detail-quantity" data-delta="-1">−</button><span id="detail-quantity">1</span><button data-action="detail-quantity" data-delta="1">＋</button></div></div><button class="button" data-action="add-detail" data-id="${safeText(product.id)}">カートに追加</button><button class="button button--dark" data-action="buy-now" data-id="${safeText(product.id)}">今すぐ購入</button>`
     : `<p class="stock-review-note">外部APIから取得した商品です。自社の在庫と販売価格を管理画面で確認するとカートに追加できます。</p><button class="button" disabled>在庫確認中</button>`;
   app.innerHTML = `${breadcrumb(safeText(product.name))}<div class="product-layout"><div class="product-gallery panel"><div class="product-gallery__main">${productImage(product, product.name)}</div></div><section class="product-info"><span class="badge badge--blue">${safeText(product.category)}</span><h1>${safeText(product.name)}</h1><div class="product-info__reviews">${rating}</div><div class="product-info__price"><strong class="price">${yen(product.price)}</strong><span class="tax-note">${product.isDemoPrice ? "API取得時点の参考価格" : "税込"}・自社在庫 ${stock} 点</span></div><p style="color:#6f7e92;font-size:12px;line-height:1.9">${safeText(product.description)}</p>${product.sourceName ? `<p class="source-caption">情報取得元：${safeText(product.sourceName)}</p>` : ""}${sourceLink ? `<a class="source-product-link" href="${sourceLink}" target="_blank" rel="noopener noreferrer">販売元の商品ページを確認 ↗</a>` : ""}<table class="spec-table"><tbody>${specs}</tbody></table><div class="product-info__actions"><button class="button button--outline" data-action="favorite" data-id="${safeText(product.id)}">${favorites.includes(product.id) ? "♥ お気に入り済み" : "♡ お気に入りに追加"}</button>${purchaseButtons}</div></section></div><section class="product-description"><h2>商品情報</h2><p>${safeText(product.description)}<br />外部API情報は取得時点の参考情報です。実際の販売価格・在庫と一致するとは限りません。</p></section>`;
+  if (demoOnly) {
+    const note = document.querySelector(".product-info__price .tax-note");
+    if (note) note.textContent = "デモ用の仮価格・実際の販売と在庫は未設定";
+    const description = document.querySelector(".product-description p");
+    if (description) description.textContent = `${product.description} 表示価格はデモ用の仮設定で、実際の購入・発送はできません。`;
+  }
   syncHeader();
 }
 
@@ -433,6 +447,17 @@ function renderCart() {
   const subtotal = cartSubtotal();
   const shipping = subtotal === 0 || subtotal >= 11000 ? 0 : 660;
   app.innerHTML = `${breadcrumb("ショッピングカート", "")}<div class="page-heading"><div><span class="eyebrow">YOUR CART</span><h1>ショッピングカート</h1><p>カートに入れた商品を確認できます。</p></div><button class="text-link" data-go="home">← 買い物を続ける</button></div><div class="stepper"><div class="stepper__item is-active"><span class="stepper__number">1</span><span>カート</span></div><div class="stepper__item"><span class="stepper__number">2</span><span>確認</span></div><div class="stepper__item"><span class="stepper__number">3</span><span>完了</span></div></div>${entries.length ? `<div class="cart-layout"><section class="panel cart-list"><div class="panel-title" style="margin:0;padding:15px 0"><span>カートの商品</span><span class="badge badge--gray">${cartQuantity()} 点</span></div>${entries.map(({ product, quantity }) => `<article class="cart-row"><div class="cart-row__image">${artFor(product.type, product.shortName)}</div><div class="cart-row__info"><span class="product-category">${product.category}</span><strong><a href="#/detail/${product.id}">${product.name}</a></strong><span class="price">${yen(product.price)}</span></div><div class="cart-row__quantity"><div class="quantity-stepper"><button data-action="change-cart" data-id="${product.id}" data-delta="-1">−</button><span>${quantity}</span><button data-action="change-cart" data-id="${product.id}" data-delta="1">＋</button></div></div><button class="delete-button" data-action="remove-cart" data-id="${product.id}" aria-label="削除">×</button></article>`).join("")}</section><aside class="panel order-summary"><h2>ご注文金額</h2><div class="summary-line"><span>商品小計（${cartQuantity()}点）</span><strong>${yen(subtotal)}</strong></div><div class="summary-line"><span>送料</span><strong>${shipping ? yen(shipping) : "無料"}</strong></div><div class="summary-total"><span>合計（税込）</span><strong>${yen(subtotal + shipping)}</strong></div><button class="button button--wide" data-action="checkout">購入手続きに進む →</button><p class="delivery-banner">${subtotal < 11000 ? `あと ${yen(11000 - subtotal)} で送料無料です` : "送料無料対象のお買い物です"}</p><p class="summary-note">※ デモ画面のため、実際のお支払いは発生しません。</p></aside></div>` : `<div class="panel empty-state"><div class="empty-state__icon">▱</div><h2>カートは空です</h2><p>気になるパーツをカートに追加してみましょう。</p><button class="button" data-go="home">商品を探す</button></div>`}`;
+  if (entries.some(({ product }) => isDemoOnlyProduct(product))) {
+    const title = document.querySelector(".order-summary h2");
+    if (title) title.textContent = "デモ金額（仮価格）";
+    const note = document.querySelector(".summary-note");
+    if (note) note.textContent = "仮価格による画面確認です。実際の購入・決済・発送はありません。";
+    document.querySelectorAll(".cart-row").forEach((row, index) => {
+      if (!isDemoOnlyProduct(entries[index]?.product)) return;
+      const price = row.querySelector(".price");
+      if (price) price.insertAdjacentText("beforeend", "（仮価格）");
+    });
+  }
   if (!entries.length && apiConfigured && serverCatalogLoaded && !products.length) {
     const heading = document.querySelector(".empty-state h2");
     const note = document.querySelector(".empty-state p");
@@ -474,6 +499,12 @@ function renderCheckout() {
     const address = document.querySelector(".address-choice > div");
     if (address) address.innerHTML = "<strong>デモ注文</strong>この注文で住所は送信されず、商品の発送も行われません。";
     document.querySelector(".checkout-panel .text-link")?.remove();
+  }
+  if (entries.some(({ product }) => isDemoOnlyProduct(product))) {
+    const title = document.querySelector(".order-summary h2");
+    if (title) title.textContent = "デモ金額（仮価格）";
+    const note = document.querySelector(".order-summary .summary-note");
+    if (note) note.textContent = "仮価格による体験です。実際の購入・決済・発送はありません。";
   }
 }
 
@@ -1061,9 +1092,9 @@ document.addEventListener("click", (event) => {
   if (kind === "add-cart") addToCart(id);
   if (kind === "favorite") toggleFavorite(id);
   if (kind === "add-detail") addToCart(id, detailQuantity);
-  if (kind === "detail-quantity") { const product = findProduct(routeInfo().id); detailQuantity = Math.min(Math.max(1, Number(product?.stock) || 1), Math.max(1, detailQuantity + Number(action.dataset.delta))); document.querySelector("#detail-quantity").textContent = detailQuantity; }
+  if (kind === "detail-quantity") { const product = findProduct(routeInfo().id); detailQuantity = Math.min(Math.max(1, cartCapacity(product)), Math.max(1, detailQuantity + Number(action.dataset.delta))); document.querySelector("#detail-quantity").textContent = detailQuantity; }
   if (kind === "buy-now") { addToCart(id); go("cart"); }
-  if (kind === "change-cart") { const next = Math.max(0, (Number(cart[id]) || 0) + Number(action.dataset.delta)); const product = findProduct(id); if (next > Number(product?.stock)) { showToast("管理画面で在庫を確認してから数量を変更してください"); return; } cart[id] = next; if (!cart[id]) delete cart[id]; persistCart(); renderCart(); }
+  if (kind === "change-cart") { const next = Math.max(0, (Number(cart[id]) || 0) + Number(action.dataset.delta)); const product = findProduct(id); if (next > cartCapacity(product)) { showToast("デモ上限または在庫数を超えています"); return; } cart[id] = next; if (!cart[id]) delete cart[id]; persistCart(); renderCart(); }
   if (kind === "remove-cart") { delete cart[id]; persistCart(); renderCart(); showToast("カートから商品を削除しました"); }
   if (kind === "checkout") { if (!currentUser && !apiConfigured) go("auth"); else go("checkout"); }
   if (kind === "place-order") placeDemoOrder(action);
